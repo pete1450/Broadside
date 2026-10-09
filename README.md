@@ -117,6 +117,14 @@ chain against runners and grape up close, and a ship reduced to 30%
 hull will break off, anchor somewhere safe, repair, and come back.
 They see, sail, shoot, and mend under exactly the same rules you do.
 
+## Music
+
+Drop `.mp3` files into `music/sailing/` and `music/combat/`, then rebuild
+(`python3 build/build.py` — the GitHub workflow does this automatically on
+push). Sailing music plays by default; combat music fades in whenever an
+enemy ship is visible and fades back out a few seconds after contact is
+lost. Tracks are picked at random, never the same one twice in a row.
+
 ## Tips
 
 - Cross the T: a stern rake at dead perpendicular with patient gunners

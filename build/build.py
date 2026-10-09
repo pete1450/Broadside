@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Assemble the single-file BROADSIDE build:
 head.html + three.min.js + logic.js + game.js -> index.html
-Also scans sailing/ + combat/ for mp3s -> music.json (plus an inlined
+Also scans music/sailing/ + music/combat/ for mp3s -> music.json (plus an inlined
 window.__MUSIC_FALLBACK copy, so file:// works too).
 
 Usage: python3 build.py [--out DIR]
-  --out DIR : write index.html + music.json into DIR (mp3 folders read from DIR)
-  default   : repo-style <build.py dir>/.. when that dir contains sailing/ or
+  --out DIR : write index.html + music.json into DIR (mp3 folders read from DIR/music/)
+  default   : repo-style <build.py dir>/.. when that dir contains music/ or
               .git, otherwise the legacy dev target
               ~/workspace/your_files/broadside/
 """
@@ -57,19 +57,19 @@ def find_outdir(cli_out):
     if cli_out:
         return pathlib.Path(cli_out)
     parent = root.parent
-    if (parent / "sailing").is_dir() or (parent / ".git").is_dir():
+    if (parent / "music" / "sailing").is_dir() or (parent / ".git").is_dir():
         return parent  # repo-style: build/ is a child of the project root
     # legacy dev flow
     return pathlib.Path.home() / "workspace" / "your_files" / "broadside"
 
 def scan_music(outdir):
-    """Filenames (only) of *.mp3 per mood folder; missing/empty -> []."""
+    """Paths (relative to index.html) of *.mp3 per mood folder; missing/empty -> []."""
     manifest = {}
     for mood in ("sailing", "combat"):
-        d = outdir / mood
+        d = outdir / "music" / mood
         files = []
         if d.is_dir():
-            files = sorted(p.name for p in d.iterdir()
+            files = sorted("music/" + mood + "/" + p.name for p in d.iterdir()
                            if p.is_file() and p.suffix.lower() == ".mp3")
         manifest[mood] = files
     return manifest

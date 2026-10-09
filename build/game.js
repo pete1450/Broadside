@@ -1154,8 +1154,8 @@ function syncHud() {
 }
 
 /* ============================== music ============================== */
-// Two folders of mp3s (sailing/ + combat/), scanned at build time into
-// music.json, with an inlined window.__MUSIC_FALLBACK copy as backup.
+// Two folders of mp3s (music/sailing/ + music/combat/), scanned at build time
+// into music.json, with an inlined window.__MUSIC_FALLBACK copy as backup.
 // Mood follows enemy visibility: quick fade to combat when a red ship is
 // seen, 5s grace then a slow fade back to sailing. (2026-10-09 user verdict)
 const MUSIC = {
@@ -1191,7 +1191,7 @@ function musicStartTrack(m) {
   if (!file) return; // empty mood list -> silence, no error
   const el = MUSIC.els[m];
   MUSIC.errCount[m] = 0;
-  el.src = m + "/" + encodeURIComponent(file);
+  el.src = encodeURI(file); // manifest holds paths relative to index.html
   el.volume = 0; // fades back in via the ramp in musicTick
   const pr = el.play();
   if (pr && pr.catch) pr.catch(() => {});
