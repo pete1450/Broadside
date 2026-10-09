@@ -385,17 +385,26 @@ function buildShipMesh(ship) {
   gring.rotation.x = -Math.PI / 2; gring.position.y = 0.5;
   gring.visible = false;
   g.add(gring);
-  // hp bar (billboarded)
-  const barG = new THREE.Group();
-  const bg = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.95, 1.15),
+  // horizontal readiness bar, floating above the ship (billboarded, scene level
+  // so a plain camera-quaternion copy works). Track + fill + a yellow tick
+  // marking the patience setting — the fill climbs to the tick and turns
+  // green there. (2026-10-09: readiness moved here from the vertical bar.)
+  const readyW = L * 0.95, readyY = 4.4 + mastH + 5;
+  const rdG = new THREE.Group();
+  const rdBg = new THREE.Mesh(new THREE.PlaneGeometry(readyW, 1.15),
     new THREE.MeshBasicMaterial({ color: 0x10181d, transparent: true, opacity: 0.65, depthTest: false }));
-  const fg = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.95, 0.8),
-    new THREE.MeshBasicMaterial({ color: 0x6fe07f, transparent: true, opacity: 0.95, depthTest: false }));
-  fg.position.z = 0.01;
-  barG.add(bg); barG.add(fg);
-  barG.position.y = 4.4 + mastH + 5;
-  barG.renderOrder = 5;
-  g.add(barG);
+  const rdFgGeo = new THREE.PlaneGeometry(readyW, 0.8);
+  rdFgGeo.translate(readyW / 2, 0, 0); // origin at left edge: scale.x grows rightward
+  const rdFg = new THREE.Mesh(rdFgGeo,
+    new THREE.MeshBasicMaterial({ color: 0xffcf5e, transparent: true, opacity: 0.95, depthTest: false }));
+  rdFg.position.set(-readyW / 2, 0, 0.01);
+  const rdTick = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 1.8),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.95, depthTest: false }));
+  rdTick.position.z = 0.02;
+  rdG.add(rdBg); rdG.add(rdFg); rdG.add(rdTick);
+  rdG.renderOrder = 5;
+  rdG.raycast = () => {}; rdBg.raycast = () => {}; rdFg.raycast = () => {}; rdTick.raycast = () => {};
+  shipRoot.add(rdG);
   // debug range ring (unit circle, scaled to effRangeOf each frame)
   const rring = new THREE.LineLoop(rangeRingGeo, rangeRingMat[side]);
   rring.position.y = 1.5;
@@ -410,7 +419,8 @@ function buildShipMesh(ship) {
   wake.position.set(-L * 0.75, 0.32, 0);
   g.add(wake);
 
-  g.userData = { shipId: ship.id, tilt, ring, gring, barG, fg, bg, wake, rring, phase: Math.random() * 7, sinking: 0 };
+  g.userData = { shipId: ship.id, tilt, ring, gring, wake, rring, rdG, rdFg, rdTick, readyW, readyY,
+    phase: Math.random() * 7, sinking: 0 };
   return g;
 }
 const shipMeshes = new Map(); // id -> mesh
@@ -515,26 +525,37 @@ for (const s of st.ships) {
   mesh.userData.shipId = s.id;
   shipRoot.add(mesh);
   shipMeshes.set(s.id, mesh);
-  // fire-readiness bar (player ships only — enemy intent stays hidden):
-  // vertical bar floating beside the ship at y=20, billboarded. Fill grows
-  // from the bottom via scale.y: cycle progress 0..1, yellow -> green
-  // gradient, full green = loaded (fires the instant a target is in arc).
-  if (s.side === "P") {
-    const rbar = new THREE.Group();
-    const rbg = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 7.2),
-      new THREE.MeshBasicMaterial({ color: 0x10181d, transparent: true, opacity: 0.6, depthTest: false }));
-    const rfgGeo = new THREE.PlaneGeometry(0.95, 6.8);
-    rfgGeo.translate(0, 3.4, 0); // origin at bottom-center: scale.y grows upward
-    const rfg = new THREE.Mesh(rfgGeo,
-      new THREE.MeshBasicMaterial({ color: 0xffcf5e, transparent: true, opacity: 0.95, depthTest: false }));
-    rfg.position.set(0, -3.4, 0.01);
-    rbar.add(rbg); rbar.add(rfg);
-    rbar.renderOrder = 6;
-    rbar.raycast = () => {};
-    rbg.raycast = () => {}; rfg.raycast = () => {};
-    shipRoot.add(rbar);
-    mesh.userData.rbar = rbar;
-    mesh.userData.rfg = rfg;
+  // vertical pool bars (ALL ships — friendly and enemy): Hull / Rigging / Crew
+  // floating beside the ship at y=20, billboarded. (2026-10-09: these replace
+  // the old vertical readiness bar; readiness moved to the horizontal bar.)
+  {
+    const poolG = new THREE.Group();
+    const defs = [
+      { color: 0x6fe07f }, // hull
+      { color: 0x5eb7ff }, // rigging
+      { color: 0xffcf5e }, // crew
+    ];
+    const fills = [];
+    defs.forEach((pd, i) => {
+      const pbg = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 7.2),
+        new THREE.MeshBasicMaterial({ color: 0x10181d, transparent: true, opacity: 0.6, depthTest: false }));
+      const pfgGeo = new THREE.PlaneGeometry(0.85, 6.8);
+      pfgGeo.translate(0, 3.4, 0); // origin at bottom-center: scale.y grows upward
+      const pfg = new THREE.Mesh(pfgGeo,
+        new THREE.MeshBasicMaterial({ color: pd.color, transparent: true, opacity: 0.95, depthTest: false }));
+      pfg.position.set(0, -3.4, 0.01);
+      const holder = new THREE.Group();
+      holder.add(pbg); holder.add(pfg);
+      holder.position.x = (i - 1) * 1.45;
+      pbg.raycast = () => {}; pfg.raycast = () => {};
+      poolG.add(holder);
+      fills.push(pfg);
+    });
+    poolG.renderOrder = 6;
+    poolG.raycast = () => {};
+    shipRoot.add(poolG);
+    mesh.userData.poolG = poolG;
+    mesh.userData.poolFills = fills;
   }
 }
 
@@ -1027,28 +1048,36 @@ if (params.has("fast")) { $("startOverlay").classList.add("hidden"); running = t
 
 /* ============================== per-frame sync ============================== */
 const tmpV = new THREE.Vector3();
-const _billQ = new THREE.Quaternion();
-const _UP = new THREE.Vector3(0, 1, 0);
 const RDY_YELLOW = new THREE.Color(0xffcf5e), RDY_GREEN = new THREE.Color(0x51ff7a);
 function syncShips(t, dt) {
   for (const s of st.ships) {
     const mesh = shipMeshes.get(s.id);
     if (!mesh) continue;
     const u = mesh.userData;
-    // fire-readiness bar (player only): follows the ship at y=20, billboarded
-    if (u.rbar) {
+    // floating bars (all ships): horizontal readiness above, vertical pools beside
+    {
       const show = s.alive && !u.sinking;
-      u.rbar.visible = show;
+      // readiness: horizontal bar above the ship; fill climbs 0 -> patience,
+      // full green at the yellow tick = the firing point
+      u.rdG.visible = show;
       if (show) {
         const rd = BS.fireReadiness(st, s);
         const pat = s.patience === undefined ? 0.6 : s.patience;
-        u.rbar.position.set(s.x + 8, 20, s.z);
-        u.rbar.quaternion.copy(camera.quaternion);
-        u.rfg.scale.y = Math.max(0.001, rd);
-        // yellow -> green gradient: full green AT the patience level (rd == pat),
-        // the point where the broadside fires. Holds full green while loaded.
-        u.rfg.material.color.copy(RDY_YELLOW).lerp(RDY_GREEN, pat > 0.01 ? Math.min(1, rd / pat) : 1);
-        u.rfg.visible = s.gunsFree !== false; // held guns: hollow bar
+        u.rdG.position.set(s.x, u.readyY, s.z);
+        u.rdG.quaternion.copy(camera.quaternion);
+        u.rdFg.scale.x = Math.max(0.001, rd);
+        u.rdFg.material.color.copy(RDY_YELLOW).lerp(RDY_GREEN, pat > 0.01 ? Math.min(1, rd / pat) : 1);
+        u.rdTick.position.x = -u.readyW / 2 + pat * u.readyW;
+        u.rdFg.visible = u.rdTick.visible = s.gunsFree !== false; // held guns: hollow bar
+      }
+      // pools: Hull / Rigging / Crew vertical bars beside the ship
+      u.poolG.visible = show;
+      if (show) {
+        u.poolG.position.set(s.x + 8, 20, s.z);
+        u.poolG.quaternion.copy(camera.quaternion);
+        u.poolFills[0].scale.y = Math.max(0.001, Math.max(0, s.hp / s.maxHp));
+        u.poolFills[1].scale.y = Math.max(0.001, (s.rigging === undefined ? 100 : s.rigging) / 100);
+        u.poolFills[2].scale.y = Math.max(0.001, (s.crew === undefined ? 100 : s.crew) / 100);
       }
     }
     // debug range ring: scale the unit circle to this ship's effective range
@@ -1075,18 +1104,6 @@ function syncShips(t, dt) {
     const heel = BS.clamp(-s.speed * 0.012, -0.09, 0.09) + Math.sin(t * 0.7 + u.phase) * 0.015;
     u.tilt.rotation.x += (heel - u.tilt.rotation.x) * Math.min(1, dt * 3);
     u.tilt.rotation.z = Math.sin(t * 0.8 + u.phase) * 0.012;
-    // hp bar
-    const pct = Math.max(0, s.hp / s.maxHp);
-    u.fg.scale.x = pct;
-    u.fg.position.x = -u.bg.geometry.parameters.width * (1 - pct) / 2;
-    u.fg.material.color.setHex(pct > 0.5 ? 0x6fe07f : pct > 0.25 ? 0xffcf5e : 0xff6b5e);
-    u.barG.visible = true; // always show: fixed-size background, fill shrinks inside it
-    // hp bar billboard: barG is a child of the ship group, which is rotated by
-    // heading, so the camera quaternion must be converted into the group's
-    // local space (pre-multiply by the inverse Y rotation) — otherwise the bar
-    // is edge-on and unreadable whenever the ship isn't facing abeam.
-    _billQ.setFromAxisAngle(_UP, -(s.heading - Math.PI / 2));
-    u.barG.quaternion.copy(_billQ).multiply(camera.quaternion);
     // selection ring + control-group ring
     u.ring.visible = selection.includes(s.id);
     if (s.group > 0) {

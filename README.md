@@ -66,11 +66,14 @@ your line of fire.
   their fire after loading for harder hits. At 100%, broadsides take
   1.5× as long and hit 1.5× as hard. Overall damage-per-second is flat —
   patience trades *rate* for *weight*.
-- **Readiness bar** — the vertical bar floating by each of your ships.
-  It climbs from zero (yellow) to your patience level and turns full
-  green there: green means loaded, and the broadside fires the instant
-  a target crosses the beam. Both the readiness bar and the hull bar above
-  every damaged ship are always visible, fixed-size, and face the camera.
+- **Readiness bar** — the horizontal bar floating above every ship,
+  friend or foe. It climbs from zero (yellow) toward the patience setting
+  and turns full green there: green means loaded, and the broadside fires
+  the instant a target crosses the beam. The small yellow tick marks the
+  patience level — yes, you can read the enemy's doctrine off their bars.
+- **Pool bars** — three vertical bars beside every ship: Hull (green),
+  Rigging (blue), Crew (amber). All always visible, fixed-size, facing the
+  camera. No more guessing how hurt that frigate is.
 - **Shot type** — Round shot (full hull damage, full range), Chain
   (×0.8 range, shreds rigging, weak vs hull), Grape (×0.55 range,
   scythes the crew, weak vs hull). Applies to the whole selection.
