@@ -2940,6 +2940,7 @@ const MUSIC = {
   lists: { sailing: [], combat: [] },
   lastPlayed: { sailing: null, combat: null },
   errCount: { sailing: 0, combat: 0 },
+  dead: { sailing: false, combat: false }, // a mood that failed every file: stop trying (2026-10-09)
   els: {},
   mood: "sailing",
   baseVol: { sailing: 0.45, combat: 0.5625 }, // 75% of the original 0.6/0.75 (2026-10-09)
@@ -2972,7 +2973,6 @@ function musicStartTrack(m) {
   const file = musicPick(m);
   if (!file) return; // empty mood list -> silence, no error
   const el = MUSIC.els[m];
-  MUSIC.errCount[m] = 0;
   el.src = encodeURI(file); // manifest holds paths relative to index.html
   el.volume = 0; // fades back in via the ramp in musicTick
   const pr = el.play();
@@ -2995,11 +2995,13 @@ function musicInit() {
     const el = new Audio();
     el.preload = "auto";
     el.addEventListener("ended", () => musicStartTrack(m)); // next random track
+    el.addEventListener("playing", () => { MUSIC.errCount[m] = 0; }); // a success clears the failure streak
     el.addEventListener("error", () => {
-      // missing/corrupt file: skip ahead; give up after a full pass so a
-      // folder of dead files can't spin forever
+      // missing/corrupt file: try the next one; once every file in the mood
+      // has failed, stop trying entirely (2026-10-09 user verdict)
       MUSIC.errCount[m]++;
       if (MUSIC.errCount[m] <= MUSIC.lists[m].length) musicStartTrack(m);
+      else MUSIC.dead[m] = true;
     });
     MUSIC.els[m] = el;
   }
@@ -3053,7 +3055,7 @@ function musicTick(dt) {
   const fadeT = MUSIC.mood === "combat" ? 2.0 : 5.0; // audible crossfades both ways (2026-10-09)
   for (const m of ["sailing", "combat"]) {
     const el = MUSIC.els[m];
-    const active = MUSIC.vol > 0 && MUSIC.mood === m && MUSIC.lists[m].length > 0;
+    const active = MUSIC.vol > 0 && MUSIC.mood === m && MUSIC.lists[m].length > 0 && !MUSIC.dead[m];
     const tgt = active ? MUSIC.baseVol[m] * MUSIC.vol : 0;
     if (active && el.paused) {
       if (el.currentSrc) { const pr = el.play(); if (pr && pr.catch) pr.catch(() => {}); } // resume: keep the crossfade continuous
@@ -3072,18 +3074,20 @@ function musicTick(dt) {
 musicInit();
 
 /* ============================== wind wisps ============================== */
-// Very light, wispy streaks drifting over the water to show local wind flow
-// (2026-10-09 user verdict). Each wisp is a soft elongated cloud ~2x ship
-// length that drifts downwind, oscillating as it fades in and out. Spawn
-// density follows local-wind disturbance, so wisps gather where the wind
-// bends and shears near land and thin out over uniform open water.
-// Density etc. are tunable live: __bs.wispTune("count", 120).
+// Transient wispy streaks drifting over the water to show local wind flow
+// (2026-10-09 user verdict). Each wisp is a few overlapping sinusoidal cloud
+// strokes, ~2x ship length, that appears in a random place, drifts downwind,
+// and fades out after a few seconds — high turnover keeps the target density
+// shimmering rather than parked. Spawn density follows local-wind disturbance,
+// so wisps gather where the wind bends and shears near land and thin out over
+// uniform open water. Density etc. are tunable live: __bs.wispTune("count", 120).
 const WISPS = {
-  count: 70,     // density — the knob we'll configure as we go
+  count: 500,    // 2026-10-09 user verdict: 500 @ full opacity is the bare minimum
   len: 30,       // ~2x frigate length
   width: 4,
-  maxOp: 0.25,   // peak opacity: very light
-  lifeMin: 7, lifeMax: 15,
+  maxOp: 1.0,
+  lifeMin: 2.5, lifeMax: 5, // short-lived: appear/disappear in random places,
+                            // high turnover keeps the target density shimmering
   drift: 5,      // u/s at wind mag 1
 };
 // phone-debug overrides: ?wisps=400&wispOp=0.9&wispLen=60
@@ -3096,23 +3100,36 @@ const WISPS = {
   const ql = parseFloat(q.get("wispLen") || "");
   if (ql > 0) WISPS.len = Math.min(200, ql);
 }
-const wispTex = (() => {
+// each wisp is a handful of overlapping sinusoidal strokes, soft at the ends
+function makeWispTex() {
   const cv = document.createElement("canvas");
   cv.width = 256; cv.height = 64;
   const ctx = cv.getContext("2d");
-  // a few soft horizontal streaks: bright middle fading at both ends
-  for (let i = 0; i < 6; i++) {
-    const y = 32 + (Math.random() - 0.5) * 34;
-    const hh = 2.5 + Math.random() * 6;
+  const n = 4 + (Math.random() * 2 | 0);
+  for (let i = 0; i < n; i++) {
+    const yBase = 32 + (Math.random() - 0.5) * 30;
+    const amp = 3 + Math.random() * 7;
+    const freq = 1 + Math.random() * 2;
+    const ph = Math.random() * Math.PI * 2;
+    const alpha = 0.14 + Math.random() * 0.12;
     const g = ctx.createLinearGradient(0, 0, 256, 0);
     g.addColorStop(0, "rgba(255,255,255,0)");
-    g.addColorStop(0.5, "rgba(255,255,255," + (0.20 + Math.random() * 0.15).toFixed(3) + ")");
+    g.addColorStop(0.5, "rgba(255,255,255," + alpha.toFixed(3) + ")");
     g.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, y - hh / 2, 256, hh);
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 1.5 + Math.random() * 2.5;
+    ctx.shadowColor = "rgba(255,255,255,0.5)";
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    for (let x = 0; x <= 256; x += 4) {
+      const y = yBase + amp * Math.sin((x / 256) * Math.PI * 2 * freq + ph);
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
   }
   // vertical falloff so edges melt away
   ctx.globalCompositeOperation = "destination-in";
+  ctx.shadowBlur = 0;
   const v = ctx.createLinearGradient(0, 0, 0, 64);
   v.addColorStop(0, "rgba(0,0,0,0)");
   v.addColorStop(0.35, "rgba(0,0,0,1)");
@@ -3123,7 +3140,8 @@ const wispTex = (() => {
   const t = new THREE.CanvasTexture(cv);
   t.encoding = THREE.sRGBEncoding;
   return t;
-})();
+}
+const wispTexs = [makeWispTex(), makeWispTex(), makeWispTex()]; // a few variants
 const wisps = [];
 // how disturbed the local wind is vs the global wind: 0 = uniform
 function windDisturb(x, z) {
@@ -3131,13 +3149,25 @@ function windDisturb(x, z) {
   return Math.abs(BS.angDiff(w.ang, st.wind)) / Math.PI + Math.abs(w.mag - 1) * 0.8;
 }
 function wispSpawn(w, initial) {
-  // sample candidates, keep the most disturbed (never on land)
+  // sample candidates in the view box around the camera target, keep the most
+  // disturbed (never on land) — the field shimmers wherever the player looks,
+  // at roughly constant on-screen density whatever the zoom
+  const viewR = camDist * 1.15;
   let bx = 0, bz = 0, bd = -1;
-  for (let k = 0; k < 8; k++) {
-    const x = (Math.random() * 2 - 1) * 1350, z = (Math.random() * 2 - 1) * 1350;
-    if (BS.inLand(x, z)) continue;
+  for (let k = 0; k < 10; k++) {
+    const x = camT.x + (Math.random() * 2 - 1) * viewR;
+    const z = camT.z + (Math.random() * 2 - 1) * viewR;
+    if (Math.abs(x) > 1400 || Math.abs(z) > 1400 || BS.inLand(x, z)) continue;
     const d = windDisturb(x, z) + Math.random() * 0.25;
     if (d > bd) { bd = d; bx = x; bz = z; }
+  }
+  if (bd < 0) { // view is all land/edge: fall back to map-wide
+    for (let k = 0; k < 10; k++) {
+      const x = (Math.random() * 2 - 1) * 1350, z = (Math.random() * 2 - 1) * 1350;
+      if (BS.inLand(x, z)) continue;
+      const d = windDisturb(x, z) + Math.random() * 0.25;
+      if (d > bd) { bd = d; bx = x; bz = z; }
+    }
   }
   if (bd < 0) return false;
   const wnd = BS.windAt(st, bx, bz);
@@ -3149,7 +3179,8 @@ function wispSpawn(w, initial) {
   return true;
 }
 function wispAdd() {
-  const mat = new THREE.MeshBasicMaterial({ map: wispTex, transparent: true, opacity: 0, depthWrite: false });
+  const mat = new THREE.MeshBasicMaterial({ map: wispTexs[(Math.random() * wispTexs.length) | 0],
+    transparent: true, opacity: 0, depthWrite: false });
   const mesh = new THREE.Mesh(wispGeo, mat);
   mesh.renderOrder = 2;
   mesh.raycast = () => {};
@@ -3170,7 +3201,12 @@ function wispsInit() {
 function wispsTick(dt) {
   for (const w of wisps) {
     w.age += dt;
-    if (w.age >= w.life || BS.inLand(w.x, w.z) || Math.abs(w.x) > 1450 || Math.abs(w.z) > 1450) {
+    // land is only checked at spawn: lives are short and drift is slow, so a
+    // wisp can't travel far enough to matter. Recycle wisps that fall out of
+    // the view box so the density follows the camera.
+    const vx = w.x - camT.x, vz = w.z - camT.z;
+    const outR = camDist * 1.7;
+    if (w.age >= w.life || vx * vx + vz * vz > outR * outR) {
       if (!wispSpawn(w, false)) { w.mesh.material.opacity = 0; }
       continue;
     }
