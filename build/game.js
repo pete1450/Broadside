@@ -971,7 +971,10 @@ function drainEvents() {
     if (ev.k === "fire") {
       addPuff(ev.x, 3.4, ev.z, { color: 0xfff2c0, size: 5, life: 0.22, grow: 26 });
       addPuff(ev.x, 4.2, ev.z, { color: 0x9aa2a8, size: 4, life: 1.4, grow: 10 });
-      const n = ev.side === "B" ? 1 : 2 + Math.floor(Math.random() * 3);
+      // per-gun broadside events (dispersed cannons): the flashes walk along
+      // the hull, one ball per gun. The old single-event broadsides (and
+      // batteries) keep their 2-4 ball spread.
+      const n = ev.perGun ? 1 : (ev.side === "B" ? 1 : 2 + Math.floor(Math.random() * 3));
       for (let i = 0; i < n; i++) {
         const jx = (Math.random() - 0.5) * 8, jz = (Math.random() - 0.5) * 8;
         addProjectile(ev.x, ev.z, ev.tx + jx, ev.tz + jz, ev.side === "B");
@@ -1052,7 +1055,9 @@ function syncShips(t, dt) {
     if (u.rring) {
       const rr = BS.effRangeOf(s);
       u.rring.scale.set(rr, 1, rr);
-      u.rring.visible = windOverlay.visible;
+      // range rings: always in the wind-debug overlay; otherwise for
+      // selected player ships (so you can see your own reach when ordering)
+      u.rring.visible = windOverlay.visible || (s.side === "P" && selection.includes(s.id));
     }
     if (u.sinking) {
       u.sinking += dt;

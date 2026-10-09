@@ -1162,6 +1162,79 @@ console.log("== perp wiring + readiness + turn rates (2026-10-09) ==");
   BS.step(st, 0.5);
   ok(!st.events.some(ev => ev.k === "fire" && ev.id === a.id), "no fire 10deg off beam (6deg arc)");
 }
+
+console.log("== dispersed cannons (2026-10-09) ==");
+{
+  // gunOffsets: even, centered, over 75% of hull length; n=1 -> [0]
+  const sol = BS.SHIPCLS.sol; // 10 guns, len 19
+  const offs = BS.gunOffsets(sol);
+  ok(offs.length === 10, "sol has 10 gun offsets");
+  ok(Math.abs(offs[0] + offs[9]) < 1e-9, "offsets centered", "offs[0]=" + offs[0].toFixed(3));
+  ok(Math.abs(offs[9] - 0.375 * 19) < 1e-9, "span = 75% of hull length");
+  let even = true;
+  for (let i = 1; i < 9; i++) if (Math.abs((offs[i] - offs[i - 1]) - (offs[1] - offs[0])) > 1e-9) even = false;
+  ok(even, "offsets evenly spaced");
+  ok(JSON.stringify(BS.gunOffsets({ guns: 1, len: 11 })) === "[0]", "single gun -> [0]");
+}
+{
+  // gunHitsTarget geometry. Firer at origin, heading 0 (bow = +z); R beam = +x.
+  const st = BS.newMatch(500, 0);
+  const a = st.ships[0]; // sol
+  a.x = 0; a.z = 0; a.heading = 0;
+  const t = st.ships[5]; // enemy frigate: len 15, beam 5.2
+  const c = BS.SHIPCLS.sol;
+  // perfect broadside-to-broadside at 40u: every gun bears (E = 7.5 > max |off| 7.125)
+  t.x = 40; t.z = 0; t.heading = 0;
+  const allHit = BS.gunOffsets(c).every(off => BS.gunHitsTarget(a, "R", off, t).hit);
+  ok(allHit, "perfect broadside-to-broadside: all guns bear");
+  // target shifted 10u toward the bow: stern guns' rays pass astern of her
+  t.x = 40; t.z = 10;
+  const gated = BS.gunOffsets(c).map(off => BS.gunHitsTarget(a, "R", off, t).hit);
+  const nHit = gated.filter(Boolean).length;
+  ok(nHit > 0 && nHit < c.guns, "lateral offset: some guns bear, stern guns miss", "hit=" + nHit + "/10");
+  ok(!gated[0] && gated[9], "stern-most gun misses, bow-most gun hits");
+  // bow-on target at 40u: only a beam-wide sliver (E = 2.6) bears
+  t.x = 40; t.z = 0; t.heading = Math.PI / 2; // bow pointing at the firer
+  const nBow = BS.gunOffsets(c).filter(off => BS.gunHitsTarget(a, "R", off, t).hit).length;
+  ok(nBow >= 2 && nBow <= 5, "bow-on: only center guns bear", "hit=" + nBow + "/10");
+  // battery target: E = 7
+  const b = st.batteries[0];
+  b.x = 40; b.z = 0; b.hp = b.maxHp; b.alive = true;
+  const nBat = BS.gunOffsets(c).filter(off => BS.gunHitsTarget(a, "R", off, b).hit).length;
+  ok(nBat === 8, "battery dead abeam: outer guns just miss (E=7 < 7.125)", "hit=" + nBat + "/10");
+}
+{
+  // tryFireBroadside statistical: perfect setup ≈ guns × hc hits over seeds;
+  // 6°-off at long range materially fewer. Counts "hit" events per broadside.
+  const shots = (seed, tx, tz, thead) => {
+    const st = BS.newMatch(seed, 0);
+    const a = st.ships[0]; // sol, 10 guns
+    a.x = 0; a.z = 0; a.heading = 0; a.gunsFree = true; a.patience = 0.5;
+    a.order = { type: "hold" }; a.speed = 0;
+    const t = st.ships[5]; // enemy frigate
+    t.x = tx; t.z = tz; t.heading = thead; t.hp = t.maxHp; t.rigging = 100; t.crew = 100;
+    st.ships.forEach(s => { if (s !== a && s !== t) { s.x = 4000; s.z = 4000; } });
+    st.batteries.forEach(b => { b.x = 4000; b.z = -4000; });
+    st.events.length = 0;
+    a.reloadR = 0;
+    BS.step(st, 0.05);
+    return st.events.filter(ev => ev.k === "hit" && ev.id === t.id).length;
+  };
+  let sum = 0;
+  const N = 40;
+  for (let seed = 0; seed < N; seed++) sum += shots(600 + seed, 30, 0, 0);
+  const mean = sum / N;
+  // hc at 30u broadside-to-broadside ≈ 0.9 - falloff; expect ≈ 10 × hc
+  ok(mean > 6 && mean <= 10, "perfect setup: ≈ guns×hc hits per broadside", "mean=" + mean.toFixed(2));
+  let sumOff = 0;
+  for (let seed = 0; seed < N; seed++) {
+    // 6° off the beam at 70u (near max range 82): geometric gate + arc edge
+    const d = 70, ang = Math.PI / 2 - 6 * Math.PI / 180;
+    sumOff += shots(700 + seed, d * Math.sin(ang), d * Math.cos(ang), 0);
+  }
+  const meanOff = sumOff / N;
+  ok(meanOff < mean * 0.7, "6°-off at long range: materially fewer hits", "mean=" + meanOff.toFixed(2) + " vs " + mean.toFixed(2));
+}
 {
   // fireReadiness = patience × MIN over broadsides of clamp(elapsed/cycle):
   // the bar is a fixed 0-100% scale; it climbs 0 → patience and turns full

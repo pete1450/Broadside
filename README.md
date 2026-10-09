@@ -54,6 +54,13 @@ Guns fire **only directly abeam** — within a few degrees of exactly
 perpendicular to your hull. There is no bow or stern chaser: if you
 want to shoot something, show it your broadside.
 
+Your cannons are spread evenly along the hull, and each fires straight
+out on its own — a shot only lands if its line actually crosses the
+enemy's hull. Dead broadside-to-broadside at the exact right moment,
+every gun connects; catch her bow-on and only the middle guns can reach
+her. Raking her stern is still the dream: her whole length lies across
+your line of fire.
+
 - **Patience slider (0–100%)** — your gunnery doctrine. Below 50% your
   crews fire early: faster shooting, lighter hits. Above 50% they hold
   their fire after loading for harder hits. At 100%, broadsides take

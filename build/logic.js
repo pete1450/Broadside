@@ -956,6 +956,42 @@ function patienceDmg(p) { return 0.5 + clamp(p, 0, 1); }
 // the target's bearing is off the firer's exact beam. Exact perpendicular ->
 // x1.5; edge of the firing arc -> x1.0. Pure — unit-tested.
 function perpBonus(dev) { return 1 + 0.5 * (1 - clamp(dev / TUNE.broadsideArc, 0, 1)); }
+// Dispersed cannons (2026-10-09, user verdict): guns are spread evenly along
+// 75% of the hull and each fires straight out along the exact beam. A gun's
+// shot is a ray; it can only connect if the ray passes through the target's
+// hull footprint. Perfect broadside-to-broadside => every gun bears; bow-on
+// targets present only a beam-wide sliver => outer guns miss. The ±6°
+// can-fire arc is unchanged; geometry decides WHICH guns connect.
+// Invented/tunable: the 0.75 spread, the battery half-extent 7.
+// Even offsets over 75% of hull length, centered. n=1 -> [0]. Pure.
+function gunOffsets(c) {
+  const n = c.guns;
+  if (n <= 1) return [0];
+  const span = c.len * 0.75, out = [];
+  for (let i = 0; i < n; i++) out.push((i / (n - 1) - 0.5) * span);
+  return out;
+}
+// Per-gun geometric hit gate. Returns {hit, gx, gz}: the gun's world pos and
+// whether its beam-ray passes through the target. Pure.
+function gunHitsTarget(s, side, offset, target) {
+  const h = s.heading;
+  const gx = s.x + Math.sin(h) * offset, gz = s.z + Math.cos(h) * offset;
+  const dx = side === "R" ? Math.cos(h) : -Math.cos(h);
+  const dz = side === "R" ? -Math.sin(h) : Math.sin(h);
+  const wx = target.x - gx, wz = target.z - gz;
+  const along = wx * dx + wz * dz;
+  const lateral = Math.abs(wx * dz - wz * dx);
+  let E;
+  if (target.kind === "battery") {
+    E = 7;
+  } else {
+    const tc = SHIPCLS[target.cls], th = target.heading;
+    const tx = Math.sin(th), tz = Math.cos(th); // target's bow dir
+    const cosPhi = dx * tx + dz * tz, sinPhi = Math.abs(dx * tz - dz * tx);
+    E = (tc.len / 2) * sinPhi + (tc.beam / 2) * cosPhi;
+  }
+  return { hit: along > 0 && lateral <= E, gx, gz };
+}
 // Patience dial (2026-10-09, user verdict: simplify firing around patience).
 // Per broadside: fire cycle = R * (0.5 + p), damage x(0.5 + p) via
 // patienceDmg, where R = class reload (crew factor applies through the
@@ -978,10 +1014,22 @@ function tryFireBroadside(st, s, side) {
   const rel = angNorm(bearing(s.x, s.z, best.x, best.z) - s.heading);
   const dev = Math.abs(Math.abs(rel) - Math.PI / 2);
   const dmgScale = patienceDmg(p) * perpBonus(dev);
-  const bx = s.x + Math.sin(s.heading + (side === "R" ? Math.PI / 2 : -Math.PI / 2)) * c.beam;
-  const bz = s.z + Math.cos(s.heading + (side === "R" ? Math.PI / 2 : -Math.PI / 2)) * c.beam;
-  st.events.push({ k: "fire", id: s.id, side, x: bx, z: bz, tx: best.x, tz: best.z, shot: s.shot });
-  for (let g = 0; g < c.guns; g++) {
+  // Dispersed cannons: each gun fires straight out from its own station along
+  // the hull. The geometric gate decides which guns bear; guns that pass roll
+  // the usual shotOutcome (range/aspect/crew/patience/perp all unchanged).
+  const h = s.heading;
+  const dx = side === "R" ? Math.cos(h) : -Math.cos(h);
+  const dz = side === "R" ? -Math.sin(h) : Math.sin(h);
+  for (const off of gunOffsets(c)) {
+    const g = gunHitsTarget(s, side, off, best);
+    if (!g.hit) {
+      // the ball flies past: splash where the ray carries it, beyond the target
+      const along = (best.x - g.gx) * dx + (best.z - g.gz) * dz;
+      st.events.push({ k: "miss", tx: g.gx + dx * (along + 12), tz: g.gz + dz * (along + 12) });
+      continue;
+    }
+    // muzzle flash at the rail, so the flashes walk along the hull
+    st.events.push({ k: "fire", id: s.id, side, x: g.gx + dx * c.beam * 0.5, z: g.gz + dz * c.beam * 0.5, tx: best.x, tz: best.z, shot: s.shot, perGun: 1 });
     const r = shotOutcome(st.rng, s, best, dmgScale);
     if (r.hit) damageUnit(st, best, r.dmg, s);
     else st.events.push({ k: "miss", tx: best.x, tz: best.z });
@@ -1530,7 +1578,7 @@ return {
   inLand, pointInPoly, mulberry32,
   newMatch, unitById, enemiesOf, computeVisibility, fowCellIJ,
   orderMove, orderHold, orderAnchor, orderWeighAnchor, orderAttack,
-  patrolAddPoint, setGunsFree, setGroup, leaveGroup, groupShips,  setShot, setPatience, patienceDmg, perpBonus, shotOf, effRangeOf, hitChance, shipFactors, damageUnit,
+  patrolAddPoint, setGunsFree, setGroup, leaveGroup, groupShips,  setShot, setPatience, patienceDmg, perpBonus, gunOffsets, gunHitsTarget, shotOf, effRangeOf, hitChance, shipFactors, damageUnit,
   shotOutcome, broadsideSolution, fireReadiness, steerToward, step,
 };
 })();
