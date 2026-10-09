@@ -87,6 +87,7 @@ function fowCellAt(x, z) {
 }
 let visStamp = 0;
 const expSoft = new Float32Array(FOG_N * FOG_N); // presentation-only soft explored edge
+const seenSoft = new Float32Array(FOG_N * FOG_N); // presentation-only soft visible edge
 function updateFog() {
   // Feathered fog (2026-10-08): BS.computeVisibility returns the binary
   // gameplay grid (vis) plus a soft seen[] field — 1 inside visionR-feather,
@@ -112,11 +113,24 @@ function updateFog() {
       expSoft[yc + cx] = sum / 9;
     }
   }
+  // soften the visible edge too (2026-10-09): same 3x3 treatment as the
+  // explored edge, so the veil->clear transition melts instead of stepping
+  for (let cy = 0; cy < FOG_N; cy++) {
+    const y0 = Math.max(0, cy - 1) * FOG_N, y1 = Math.min(FOG_N - 1, cy + 1) * FOG_N;
+    const yc = cy * FOG_N;
+    for (let cx = 0; cx < FOG_N; cx++) {
+      const x0 = Math.max(0, cx - 1), x1 = Math.min(FOG_N - 1, cx + 1);
+      let sum = seen[y0 + x0] + seen[y0 + cx] + seen[y0 + x1] +
+                seen[yc + x0] + seen[yc + cx] + seen[yc + x1] +
+                seen[y1 + x0] + seen[y1 + cx] + seen[y1 + x1];
+      seenSoft[yc + cx] = sum / 9;
+    }
+  }
   for (let cy = 0; cy < FOG_N; cy++) {
     const base = cy * FOG_N;
     for (let cx = 0; cx < FOG_N; cx++) {
       const ci = base + cx, o = ci * 4;
-      const s = seen[ci], e = expSoft[ci];
+      const s = seenSoft[ci], e = expSoft[ci];
       // white (unexplored) crossfades to the steel-blue veil (explored, unseen)
       // as e goes 0->1; both fade to clear as s goes 0->1
       d[o] = 135 + Math.round(120 * (1 - e));
@@ -1329,7 +1343,7 @@ musicInit();
 // where the wind bends and shears near land and thin out over uniform open
 // water. Density etc. are tunable live: __bs.wispTune("count", 120).
 const WISPS = {
-  count: 500,    // 2026-10-09 user verdict: 500 @ full opacity is the bare minimum
+  count: 875,    // 500 + 75% (2026-10-09)
   len: 60,       // doubled 2026-10-09
   width: 4,
   maxOp: 1.0,
