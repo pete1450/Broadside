@@ -1,4 +1,7 @@
 {
  "sailing": [],
- "combat": []
+ "combat": [
+  "music/combat/DeepWaterEngagement.mp3",
+  "music/combat/NavalEngagement.mp3"
+ ]
 }
