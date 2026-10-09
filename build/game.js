@@ -1204,6 +1204,9 @@ const MUSIC = {
   errCount: { sailing: 0, combat: 0 },
   dead: { sailing: false, combat: false }, // a mood that failed every file: stop trying (2026-10-09)
   els: {},
+  currentFile: { sailing: null, combat: null }, // list-relative path loaded in each element
+  resume: { sailing: null, combat: null },      // {file, pos}: where each mood left off (2026-10-09)
+  pendingSeek: { sailing: null, combat: null },
   mood: "sailing",
   baseVol: { sailing: 0.45, combat: 0.5625 }, // 75% of the original 0.6/0.75 (2026-10-09)
   quietT: 99,
@@ -1235,6 +1238,8 @@ function musicStartTrack(m) {
   const file = musicPick(m);
   if (!file) return; // empty mood list -> silence, no error
   const el = MUSIC.els[m];
+  MUSIC.currentFile[m] = file;
+  MUSIC.resume[m] = null; // new track: no stale position
   el.src = encodeURI(file); // manifest holds paths relative to index.html
   el.volume = 0; // fades back in via the ramp in musicTick
   const pr = el.play();
@@ -1258,6 +1263,14 @@ function musicInit() {
     el.preload = "auto";
     el.addEventListener("ended", () => musicStartTrack(m)); // next random track
     el.addEventListener("playing", () => { MUSIC.errCount[m] = 0; }); // a success clears the failure streak
+    el.addEventListener("loadedmetadata", () => {
+      // apply a pending resume-seek once the (re)loaded file's metadata is in
+      const p = MUSIC.pendingSeek[m];
+      if (p !== null && p !== undefined && isFinite(p)) {
+        try { el.currentTime = Math.max(0, p); } catch (e) {}
+      }
+      MUSIC.pendingSeek[m] = null;
+    });
     el.addEventListener("error", () => {
       // missing/corrupt file: try the next one; once every file in the mood
       // has failed, stop trying entirely (2026-10-09 user verdict)
@@ -1319,9 +1332,28 @@ function musicTick(dt) {
     const el = MUSIC.els[m];
     const active = MUSIC.vol > 0 && MUSIC.mood === m && MUSIC.lists[m].length > 0 && !MUSIC.dead[m];
     const tgt = active ? MUSIC.baseVol[m] * MUSIC.vol : 0;
+    // remember where each mood is playing, so switching back fades to the
+    // same song at the same spot (2026-10-09)
+    if (!el.paused && !el.ended && el.currentTime > 0 && MUSIC.currentFile[m]) {
+      MUSIC.resume[m] = { file: MUSIC.currentFile[m], pos: el.currentTime };
+    }
     if (active && el.paused) {
-      if (el.currentSrc) { const pr = el.play(); if (pr && pr.catch) pr.catch(() => {}); } // resume: keep the crossfade continuous
-      else musicStartTrack(m);
+      const r = MUSIC.resume[m];
+      if (r) {
+        if (MUSIC.currentFile[m] !== r.file) {
+          // different file than remembered (shouldn't normally happen): reload it
+          el.src = encodeURI(r.file);
+          MUSIC.currentFile[m] = r.file;
+          MUSIC.pendingSeek[m] = r.pos; // applied on loadedmetadata
+        } else if (isFinite(r.pos) && Math.abs(el.currentTime - r.pos) > 0.5) {
+          try { el.currentTime = r.pos; } catch (e) {}
+        }
+        const pr = el.play();
+        if (pr && pr.catch) pr.catch(() => {});
+      } else if (el.currentSrc) {
+        const pr = el.play();
+        if (pr && pr.catch) pr.catch(() => {});
+      } else musicStartTrack(m);
     }
     const v = el.volume;
     if (v !== tgt) {
@@ -1506,7 +1538,7 @@ frame();
 
 /* ============================== debug ============================== */
 window.__bs = {
-  BS, THREE, camera, scene,
+  BS, THREE, camera, scene, MUSIC,
   get st() { return st; },
   get selection() { return selection.slice(); },
   // wind-wisp tuning (live): __bs.wispTune("count", 120), ("maxOp", 0.3), ...
