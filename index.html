@@ -3071,6 +3071,114 @@ function musicTick(dt) {
 }
 musicInit();
 
+/* ============================== wind wisps ============================== */
+// Very light, wispy streaks drifting over the water to show local wind flow
+// (2026-10-09 user verdict). Each wisp is a soft elongated cloud ~2x ship
+// length that drifts downwind, oscillating as it fades in and out. Spawn
+// density follows local-wind disturbance, so wisps gather where the wind
+// bends and shears near land and thin out over uniform open water.
+// Density etc. are tunable live: __bs.wispTune("count", 120).
+const WISPS = {
+  count: 70,     // density — the knob we'll configure as we go
+  len: 30,       // ~2x frigate length
+  width: 4,
+  maxOp: 0.25,   // peak opacity: very light
+  lifeMin: 7, lifeMax: 15,
+  drift: 5,      // u/s at wind mag 1
+};
+const wispTex = (() => {
+  const cv = document.createElement("canvas");
+  cv.width = 256; cv.height = 64;
+  const ctx = cv.getContext("2d");
+  // a few soft horizontal streaks: bright middle fading at both ends
+  for (let i = 0; i < 6; i++) {
+    const y = 32 + (Math.random() - 0.5) * 34;
+    const hh = 2.5 + Math.random() * 6;
+    const g = ctx.createLinearGradient(0, 0, 256, 0);
+    g.addColorStop(0, "rgba(255,255,255,0)");
+    g.addColorStop(0.5, "rgba(255,255,255," + (0.20 + Math.random() * 0.15).toFixed(3) + ")");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y - hh / 2, 256, hh);
+  }
+  // vertical falloff so edges melt away
+  ctx.globalCompositeOperation = "destination-in";
+  const v = ctx.createLinearGradient(0, 0, 0, 64);
+  v.addColorStop(0, "rgba(0,0,0,0)");
+  v.addColorStop(0.35, "rgba(0,0,0,1)");
+  v.addColorStop(0.65, "rgba(0,0,0,1)");
+  v.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, 256, 64);
+  const t = new THREE.CanvasTexture(cv);
+  t.encoding = THREE.sRGBEncoding;
+  return t;
+})();
+const wisps = [];
+// how disturbed the local wind is vs the global wind: 0 = uniform
+function windDisturb(x, z) {
+  const w = BS.windAt(st, x, z);
+  return Math.abs(BS.angDiff(w.ang, st.wind)) / Math.PI + Math.abs(w.mag - 1) * 0.8;
+}
+function wispSpawn(w, initial) {
+  // sample candidates, keep the most disturbed (never on land)
+  let bx = 0, bz = 0, bd = -1;
+  for (let k = 0; k < 8; k++) {
+    const x = (Math.random() * 2 - 1) * 1350, z = (Math.random() * 2 - 1) * 1350;
+    if (BS.inLand(x, z)) continue;
+    const d = windDisturb(x, z) + Math.random() * 0.25;
+    if (d > bd) { bd = d; bx = x; bz = z; }
+  }
+  if (bd < 0) return false;
+  const wnd = BS.windAt(st, bx, bz);
+  w.x = bx; w.z = bz; w.ang = wnd.ang; w.mag = wnd.mag;
+  w.life = WISPS.lifeMin + Math.random() * (WISPS.lifeMax - WISPS.lifeMin);
+  w.age = initial ? Math.random() * w.life : 0;
+  w.phase = Math.random() * Math.PI * 2;
+  w.oscF = 1.5 + Math.random() * 2;
+  return true;
+}
+function wispAdd() {
+  const mat = new THREE.MeshBasicMaterial({ map: wispTex, transparent: true, opacity: 0, depthWrite: false });
+  const mesh = new THREE.Mesh(wispGeo, mat);
+  mesh.renderOrder = 2;
+  mesh.raycast = () => {};
+  scene.add(mesh);
+  const w = { mesh, x: 0, z: 0, ang: 0, mag: 1, age: 0, life: 1, phase: 0, oscF: 2 };
+  wispSpawn(w, true);
+  wisps.push(w);
+  return w;
+}
+const wispGeo = (() => {
+  const geo = new THREE.PlaneGeometry(WISPS.len, WISPS.width);
+  geo.rotateX(-Math.PI / 2); // lie flat; streak along local X
+  return geo;
+})();
+function wispsInit() {
+  for (let i = 0; i < WISPS.count; i++) wispAdd();
+}
+function wispsTick(dt) {
+  for (const w of wisps) {
+    w.age += dt;
+    if (w.age >= w.life || BS.inLand(w.x, w.z) || Math.abs(w.x) > 1450 || Math.abs(w.z) > 1450) {
+      if (!wispSpawn(w, false)) { w.mesh.material.opacity = 0; }
+      continue;
+    }
+    const wnd = BS.windAt(st, w.x, w.z); // follow bends as they drift
+    w.ang = wnd.ang; w.mag = wnd.mag;
+    const sp = WISPS.drift * w.mag;
+    w.x += Math.sin(w.ang) * sp * dt;
+    w.z += Math.cos(w.ang) * sp * dt;
+    const env = Math.sin(Math.PI * w.age / w.life); // fade in and out
+    const osc = 0.65 + 0.35 * Math.sin(w.age * w.oscF + w.phase); // the shimmer
+    w.mesh.material.opacity = WISPS.maxOp * env * osc;
+    const wob = Math.sin(w.age * 0.9 + w.phase) * 2; // gentle lateral wobble
+    w.mesh.position.set(w.x + Math.cos(w.ang) * wob, 0.7, w.z - Math.sin(w.ang) * wob);
+    w.mesh.rotation.y = w.ang - Math.PI / 2;
+  }
+}
+wispsInit();
+
 /* ============================== main loop ============================== */
 let lastT = performance.now();
 let frameN = 0;
@@ -3094,6 +3202,7 @@ function frame() {
   if (fogAcc >= 0.1) { fogAcc = 0; updateFog(); } // time-based, not frame-based
   updateFx(dt);
   musicTick(dt);
+  wispsTick(dt);
   if (frameN % 20 === 0) syncHud();
   renderer.render(scene, camera);
 }
@@ -3104,6 +3213,23 @@ window.__bs = {
   BS, THREE, camera, scene,
   get st() { return st; },
   get selection() { return selection.slice(); },
+  // wind-wisp tuning (live): __bs.wispTune("count", 120), ("maxOp", 0.3), ...
+  wispTune(k, v) {
+    if (k === "count") {
+      const n = Math.max(0, Math.min(400, v | 0));
+      while (wisps.length < n) wispAdd();
+      while (wisps.length > n) {
+        const w = wisps.pop();
+        scene.remove(w.mesh);
+        w.mesh.material.dispose();
+      }
+      WISPS.count = n;
+      return wisps.length;
+    }
+    WISPS[k] = v;
+    return WISPS[k];
+  },
+  wispDisturb(x, z) { return windDisturb(x, z); },
   select(id) { selection = [id]; refreshButtons(); },
   selectMany(ids) { selection = ids.slice(); refreshButtons(); },
   clearSel() { selection = []; refreshButtons(); },
