@@ -203,14 +203,14 @@ console.log("== fog of war ==");
 {
   const st = BS.newMatch(55, 0);
   ok(st.fow.exp.every(v => v === 0), "fog starts fully unexplored");
-  const s = st.ships[0]; // sol, vision 65
+  const s = st.ships[0]; // sol, vision 85
   s.x = 0; s.z = 100; s.heading = Math.PI; s.speed = 0; s.order = { type: "hold" };
   for (const o of st.ships) if (o !== s) { o.x = 400; o.z = 400; }
   BS.step(st, 0.2);
   const cell = (x, z) => BS.fowCellIJ(st.fow, x, z);
   ok(st.fow.exp[cell(0, 100)] === 1, "ship stamps explored disc under itself");
   ok(st.fow.exp[cell(0, 40)] === 1, "cell within vision radius explored");
-  ok(st.fow.exp[cell(0, 10)] === 0, "cell beyond vision+feather stays unexplored", "d~89 > 65+12");
+  ok(st.fow.exp[cell(0, -10)] === 0, "cell beyond vision+feather stays unexplored", "d~109 > 85+12");
   // sail north: new cells flip to explored
   BS.orderMove(st, [s.id], 0, 0, false);
   let guard = 0;
@@ -220,7 +220,7 @@ console.log("== fog of war ==");
 {
   // computeVisibility: enemy ship visible only inside a player ship's vision
   const st = BS.newMatch(56, 0);
-  const s = st.ships[0]; // sol, vision 65
+  const s = st.ships[0]; // sol, vision 85
   s.x = 0; s.z = 100; s.heading = Math.PI; s.speed = 0; s.order = { type: "hold" };
   for (const o of st.ships) if (o !== s && o.side === "P") { o.x = 400; o.z = 400; }
   const e = st.ships[5];
@@ -230,7 +230,7 @@ console.log("== fog of war ==");
   const cell = (x, z) => BS.fowCellIJ(st.fow, x, z);
   let v = BS.computeVisibility(st);
   ok(v.vis[cell(e.x, e.z)] === 1, "enemy inside vision is currently visible");
-  e.x = 0; e.z = 20; // 80 away: outside vision
+  e.x = 0; e.z = 10; // 90 away: outside vision
   v = BS.computeVisibility(st);
   ok(v.vis[cell(e.x, e.z)] === 0, "enemy outside vision is not currently visible");
   ok(st.fow.exp[cell(0, 40)] === 1, "explored flag persists after leaving vision");
@@ -238,18 +238,18 @@ console.log("== fog of war ==");
 {
   // soft fog edge: seen[] is fractional across the feather band
   const st = BS.newMatch(57, 0);
-  const s = st.ships[0]; // sol, vision 65, feather 12
+  const s = st.ships[0]; // sol, vision 85, feather 12
   s.x = 0; s.z = 100; s.heading = Math.PI; s.speed = 0; s.order = { type: "hold" };
   for (const o of st.ships) if (o !== s) { o.x = 400; o.z = 400; }
   BS.step(st, 0.2);
   const v = BS.computeVisibility(st);
   const cell = (x, z) => BS.fowCellIJ(st.fow, x, z);
   ok(v.seen[cell(0, 100)] === 1, "seen=1 at the ship's own cell");
-  const edge = v.seen[cell(0, 30)]; // d~70: inside the feather band (53..77)
+  const edge = v.seen[cell(0, 12)]; // d~87: inside the feather band (73..97)
   ok(edge > 0.05 && edge < 0.6, "seen is fractional at the vision edge", "seen=" + edge.toFixed(3));
-  ok(v.vis[cell(0, 30)] === 0, "binary vis still 0 outside the vision radius");
-  ok(st.fow.exp[cell(0, 30)] === 1, "feather band stamps explored (seen>0.02)");
-  ok(v.seen[cell(0, 10)] === 0, "seen=0 well outside vision+feather");
+  ok(v.vis[cell(0, 12)] === 0, "binary vis still 0 outside the vision radius");
+  ok(st.fow.exp[cell(0, 12)] === 1, "feather band stamps explored (seen>0.02)");
+  ok(v.seen[cell(0, -2)] === 0, "seen=0 well outside vision+feather");
 }
 
 console.log("== A* pathfinding around land ==");
@@ -931,7 +931,7 @@ console.log("== repair at anchor (2026-10-08) ==");
      "rig=" + s.rigging.toFixed(1) + " crew=" + s.crew.toFixed(1));
   const hpMid = s.hp;
   const e = st.ships[5];
-  e.x = 0; e.z = 430; // 30u away: inside the sol's 65u vision
+  e.x = 0; e.z = 430; // 30u away: inside the sol's 85u vision
   stepFor(st, 2);
   ok(!s.repairing && s.repairT === 0, "sighting an enemy resets the grace period");
   ok(s.hp === hpMid, "no repair while threatened");
@@ -1087,8 +1087,12 @@ console.log("== turn rates + longer ranges + vision-gated fire (2026-10-08) ==")
      "turned=" + turned.toFixed(2) + " rad");
 }
 {
-  // vision gating: a sol (range 82, vision 65) holds fire at a 75u target
+  // vision gating: with a synthetic 60u sol vision, a sol (range 82) holds fire at a 75u target.
+  // (production sol vision is 85 > 82 range, so the gate can't trip for a real sol;
+  //  this exercises the mechanic itself, then restores production values)
   const st = BS.newMatch(307, 0);
+  const realVision = BS.SHIPCLS.sol.vision;
+  BS.SHIPCLS.sol.vision = 60;
   const a = st.ships[0]; // player sol
   a.x = 0; a.z = 0; a.heading = 0; a.reloadR = 0; a.gunsFree = true;
   const e = st.ships[5];
@@ -1098,21 +1102,22 @@ console.log("== turn rates + longer ranges + vision-gated fire (2026-10-08) ==")
   st.events.length = 0;
   BS.step(st, 0.2);
   ok(!st.events.some(ev => ev.k === "fire" && ev.id === a.id),
-     "sol holds fire at 75u: inside 82u range but beyond 65u vision");
+     "sol holds fire at 75u: inside 82u range but beyond 60u vision");
+  BS.SHIPCLS.sol.vision = realVision;
 }
 {
-  // frigate (range 70, vision 80) fires at 68u: inside both
+  // frigate (range 70, vision 100) fires at 68u: inside both
   const st = BS.newMatch(308, 0);
   const f = st.ships.find(s => s.side === "P" && s.cls === "frigate");
   f.x = 0; f.z = 0; f.heading = 0; f.reloadR = 0; f.gunsFree = true;
   const e = st.ships[5];
-  e.hp = e.maxHp; e.heading = 0; e.x = 68; e.z = 0; // inside 70u range and 80u vision: fires
+  e.hp = e.maxHp; e.heading = 0; e.x = 68; e.z = 0; // inside 70u range and 100u vision: fires
   st.ships.forEach(s => { if (s !== f && s !== e) { s.x = 1400; s.z = 1400; } });
   st.batteries.forEach(b => { b.x = 1400; b.z = -1400; });
   st.events.length = 0;
   BS.step(st, 0.2);
   ok(st.events.some(ev => ev.k === "fire" && ev.id === f.id),
-     "frigate fires at 68u: inside 70u range and 80u vision");
+     "frigate fires at 68u: inside 70u range and 100u vision");
 }
 {
   // batteries are exempt from the vision gate (static, revealed once explored)
