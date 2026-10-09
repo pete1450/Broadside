@@ -30,8 +30,6 @@ function mulberry32(seed) {
 const TUNE = {
   gunDmg: 11,          // damage per gun at point blank
   baseHit: 0.9,        // point-blank hit chance
-  // 2026-10-08: baseHit 0.62 -> 0.9 and gunDmg 14 -> 11, together (faster, more
-  // decisive gunnery is part of the strategy-over-dice goal); both tunable.
   broadsideArc: Math.PI / 30, // ±6° of the beam (2026-10-09 user verdict: guns fire
   // only directly perpendicular to the centerline; tighter arc + perpendicularity
   // damage bonus make broadside-to-broadside the max-damage geometry)
@@ -42,12 +40,10 @@ const TUNE = {
   batteryRange: 98,
   batteryDmg: 30,
   batteryReload: 12,
-  batteryHp: 220,       // shore battery hp (tunable)
-  repairGrace: 3,      // seconds anchored + unseen before repairs start (tunable; 2026-10-09: 10 -> 5 -> 3)
-  repairRate: 3.375,   // %/s restored to hull/rigging/crew while repairing (tunable; 2026-10-09: 1.5 -> 2.25 -> 3.375, +50%)
-  boundsHalf: 1500,   // playable SQUARE half-size: |x|,|z| <= 1500 (2026-10-08).
-                     // Was a disc (boundsR 475): the map corners were unreachable.
-                     // 2026-10-08: ocean expanded ~10x (960x960 -> 3000x3000).
+  batteryHp: 220,    
+  repairGrace: 3,   
+  repairRate: 3.375,   
+  boundsHalf: 1500,   
 };
 
 const SHIPCLS = {
