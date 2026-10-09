@@ -3086,6 +3086,16 @@ const WISPS = {
   lifeMin: 7, lifeMax: 15,
   drift: 5,      // u/s at wind mag 1
 };
+// phone-debug overrides: ?wisps=400&wispOp=0.9&wispLen=60
+{
+  const q = new URLSearchParams(location.search);
+  const qc = parseInt(q.get("wisps") || "", 10);
+  if (qc >= 0) WISPS.count = Math.min(600, qc);
+  const qo = parseFloat(q.get("wispOp") || "");
+  if (qo >= 0) WISPS.maxOp = Math.min(1, qo);
+  const ql = parseFloat(q.get("wispLen") || "");
+  if (ql > 0) WISPS.len = Math.min(200, ql);
+}
 const wispTex = (() => {
   const cv = document.createElement("canvas");
   cv.width = 256; cv.height = 64;
