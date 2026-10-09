@@ -2826,9 +2826,11 @@ function syncShips(t, dt) {
     if (!mesh) continue;
     const u = mesh.userData;
     // floating bars (all ships): horizontal readiness above, vertical pools beside.
-    // Hidden with the ship under fog of war (fogVis false for unseen enemies).
+    // Hidden with the ship under fog of war (fogVis false for unseen enemies),
+    // and hidden entirely before SET SAIL / after the result (they'd glow
+    // through the title overlay while the ships stay dimmed).
     {
-      const show = s.alive && !u.sinking && u.fogVis !== false;
+      const show = running && !st.result && s.alive && !u.sinking && u.fogVis !== false;
       // readiness: horizontal bar above the ship; fill climbs 0 -> patience,
       // full green at the yellow tick = the firing point
       u.rdG.visible = show;
