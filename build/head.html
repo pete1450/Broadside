@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>BROADSIDE — naval RTS</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#0d1b22;
+    font-family:-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
+    touch-action:none; }
+  #c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .hud { position:fixed; z-index:10; pointer-events:none; color:#fff; }
+  #topbar { top:0; left:0; right:0; display:flex; align-items:center; justify-content:space-between;
+    padding:8px 12px; padding-top:calc(8px + env(safe-area-inset-top));
+    background:linear-gradient(rgba(8,18,24,.55), rgba(8,18,24,0)); }
+  #title { font-weight:800; letter-spacing:3px; font-size:15px; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+  #fleets { font-size:12px; opacity:.9; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+  #fleets .gp { color:#7dff9e; font-weight:700; } #fleets .ge { color:#ff8f7d; font-weight:700; }
+  #windbox { display:flex; align-items:center; gap:8px; }
+  #windcompass { width:44px; height:44px; }
+  #windlabel { font-size:10px; letter-spacing:2px; opacity:.85; text-align:center; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+  #bWindDbg, #bMusic { min-width:42px; padding:9px 6px; font-size:15px; }
+  #capwrap { position:fixed; top:calc(64px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    z-index:10; pointer-events:none; text-align:center; display:none; }
+  #caplabel { font-size:11px; letter-spacing:2px; color:#ffe9a8; text-shadow:0 1px 3px rgba(0,0,0,.7); margin-bottom:3px; }
+  #capbar { width:210px; height:9px; border-radius:5px; background:rgba(0,0,0,.45);
+    border:1px solid rgba(255,255,255,.35); overflow:hidden; margin:0 auto; }
+  #capfill { height:100%; width:0%; background:linear-gradient(90deg,#ffd76a,#ffb52e); border-radius:5px; }
+  #orders { position:fixed; left:0; right:0; bottom:0; z-index:10; display:flex; gap:6px;
+    padding:8px 10px; padding-bottom:calc(10px + env(safe-area-inset-bottom));
+    background:linear-gradient(rgba(8,18,24,0), rgba(8,18,24,.6));
+    justify-content:center; flex-wrap:wrap; pointer-events:none; }
+  .obtn { pointer-events:auto; min-width:58px; padding:9px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.35);
+    background:rgba(16,30,38,.78); color:#fff; font-size:12px; font-weight:600; letter-spacing:.5px;
+    text-shadow:0 1px 2px rgba(0,0,0,.5); }
+  .obtn:active { background:rgba(60,100,120,.85); }
+  .obtn.armed { background:rgba(214,164,32,.9); border-color:#ffe9a8; color:#1a1a1a; text-shadow:none; }
+  .obtn:disabled { opacity:.35; }
+  #selpanel { position:fixed; left:10px; bottom:calc(106px + env(safe-area-inset-bottom)); z-index:10;
+    background:rgba(10,22,30,.8); border:1px solid rgba(255,255,255,.25); border-radius:10px;
+    padding:8px 10px; color:#fff; font-size:12px; display:none; pointer-events:auto; max-width:230px; }
+  #selpanel .nm { font-weight:700; font-size:13px; }
+  /* damage bars: hull (green) / rigging (blue) / crew (amber) */
+  #selpanel .bprow { display:flex; align-items:center; gap:5px; margin-top:4px; }
+  #selpanel .bplab { font-size:10px; font-weight:800; width:44px; text-align:left; }
+  #selpanel .bptrack { flex:1; height:5px; border-radius:3px; background:rgba(0,0,0,.5); overflow:hidden; }
+  #selpanel .bpfill { height:100%; border-radius:3px; }
+  #selpanel .sub { opacity:.75; margin-top:4px; line-height:1.35; }
+  /* gunnery doctrine row: shot type + fire-threshold slider (2026-10-08) */
+  #firewrap { flex-basis:100%; display:flex; align-items:center; justify-content:center; gap:8px;
+    pointer-events:auto; padding:2px 0; }
+  #firelabel { font-size:11px; font-weight:700; color:#ffe9a8; white-space:nowrap;
+    text-shadow:0 1px 2px rgba(0,0,0,.5); min-width:76px; text-align:right; }
+  #fireRange { width:150px; max-width:38vw; accent-color:#ffd76a; }
+  #hint { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:10; pointer-events:none;
+    background:rgba(10,22,30,.75); color:#ffe9a8; font-size:13px; padding:8px 14px; border-radius:10px;
+    border:1px solid rgba(255,233,168,.4); display:none; text-align:center; }
+  #groupfan { position:fixed; left:0; right:0; bottom:calc(106px + env(safe-area-inset-bottom)); z-index:11;
+    display:flex; gap:8px; justify-content:center; pointer-events:none; }
+  .gbtn { pointer-events:auto; width:46px; height:46px; border-radius:50%; border:2px solid rgba(255,255,255,.7);
+    font-size:16px; font-weight:800; color:#10202a; text-shadow:none; }
+  .gbtn:active { transform:scale(1.12); }
+  #gUngroup { background:rgba(16,30,38,.85); color:#fff; border:2px solid rgba(255,255,255,.4); }
+  .overlay { position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; background:rgba(6,14,19,.72); color:#fff; text-align:center; padding:20px; }
+  .overlay h1 { letter-spacing:6px; font-size:34px; margin:0 0 6px; }
+  .overlay p { max-width:420px; font-size:14px; line-height:1.5; opacity:.9; }
+  .overlay .big { font-size:52px; margin-bottom:4px; }
+  #startBtn, #againBtn { pointer-events:auto; margin-top:16px; padding:13px 34px; font-size:16px; font-weight:700;
+    letter-spacing:2px; border-radius:12px; border:1px solid #ffe9a8; background:#d6a420; color:#1a1a1a; }
+  #startBtn:active, #againBtn:active { background:#f0bd30; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud" id="topbar">
+  <div>
+    <div id="title">BROADSIDE</div>
+    <div id="fleets"><span class="gp" id="pcount">5</span> &nbsp;vs&nbsp; <span class="ge" id="ecount">4</span></div>
+  </div>
+  <div id="windbox">
+    <div id="windlabel">WIND</div>
+    <canvas id="windcompass" width="88" height="88"></canvas>
+    <button id="bWindDbg" class="obtn" title="debug overlay: wind field + gun range rings">🌬️</button>
+    <button id="bMusic" class="obtn" title="toggle music">🔊</button>
+  </div>
+</div>
+
+<div id="capwrap">
+  <div id="caplabel">HARBOR CAPTURE</div>
+  <div id="capbar"><div id="capfill"></div></div>
+</div>
+
+<div id="selpanel">
+  <div class="nm" id="selname">—</div>
+  <div class="bprow"><span class="bplab" style="color:#6fe07f">Hull</span><div class="bptrack"><div class="bpfill" id="selhull" style="background:#6fe07f"></div></div></div>
+  <div class="bprow"><span class="bplab" style="color:#5eb7ff">Rigging</span><div class="bptrack"><div class="bpfill" id="selrig" style="background:#5eb7ff"></div></div></div>
+  <div class="bprow"><span class="bplab" style="color:#ffcf5e">Crew</span><div class="bptrack"><div class="bpfill" id="selcrew" style="background:#ffcf5e"></div></div></div>
+  <div class="sub" id="selsub">—</div>
+</div>
+
+<div id="hint"></div>
+
+<div id="groupfan" class="hidden">
+  <button class="gbtn" data-g="1" style="background:#ffd34d">1</button>
+  <button class="gbtn" data-g="2" style="background:#4dd7ff">2</button>
+  <button class="gbtn" data-g="3" style="background:#b06bff">3</button>
+  <button class="gbtn" data-g="4" style="background:#ff9a3d">4</button>
+  <button class="gbtn" data-g="5" style="background:#7dff6b">5</button>
+  <button class="gbtn" id="gUngroup">✕</button>
+</div>
+
+<div id="orders">
+  <button class="obtn" id="bMove">Move</button>
+  <button class="obtn" id="bAttack">Attack</button>
+  <button class="obtn" id="bPatrol">Patrol</button>
+  <button class="obtn" id="bHold">Hold</button>
+  <button class="obtn" id="bAnchor">Anchor</button>
+  <button class="obtn" id="bGroup">Group</button>
+  <button class="obtn" id="bGuns">Guns: Free</button>
+  <button class="obtn" id="bShot">Shot: Round</button>
+  <div id="firewrap">
+    <span id="firelabel">Patience 60%</span>
+    <input type="range" id="fireRange" min="0" max="100" step="5" value="60">
+  </div>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="big">⚓</div>
+  <h1>BROADSIDE</h1>
+  <p>Command the green fleet. Sail north, fight through the red squadron, and
+  <b>anchor inside the harbor</b> to capture the fort. Mind the wind — your ships
+  tack automatically, but sailing upwind is slow. Broadsides only fire abeam:
+  don't show your broadside unless you're ready to use it.</p>
+  <button id="startBtn">SET SAIL</button>
+</div>
+
+<div class="overlay hidden" id="endOverlay">
+  <div class="big" id="endEmoji">🏆</div>
+  <h1 id="endTitle">HARBOR TAKEN</h1>
+  <p id="endSub"></p>
+  <button id="againBtn">SAIL AGAIN</button>
+</div>
+
+<script>
