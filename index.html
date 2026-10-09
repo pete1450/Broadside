@@ -2970,7 +2970,8 @@ try {
   const v = localStorage.getItem("bs_music_vol");
   if (v !== null) MUSIC.vol = Math.max(0, Math.min(1, parseFloat(v)));
   else if (localStorage.getItem("bs_music_muted") === "1") MUSIC.vol = 0; // migrate old mute toggle
-} catch (e) {}
+  else MUSIC.vol = 0.25; // default 25% on load (2026-10-09 user verdict)
+} catch (e) { MUSIC.vol = 0.25; }
 
 function musicPick(m) {
   const list = MUSIC.lists[m];
