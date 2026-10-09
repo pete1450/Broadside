@@ -114,13 +114,16 @@ function updateFog() {
   fogCtx.putImageData(fogImg, 0, 0);
   fogTex.needsUpdate = true;
   visStamp++;
-  // enemy SHIP meshes show only inside current player vision
+  // enemy SHIP meshes show only inside current player vision; their floating
+  // bars (scene-level groups) must hide too, or they'd give away positions
   for (const s of st.ships) {
     if (s.side !== "E" || s.kind !== "ship") continue;
     const mesh = shipMeshes.get(s.id);
     if (!mesh || mesh.userData.sinking) continue;
     const ci = fowCellAt(s.x, s.z);
-    mesh.visible = s.alive && ci >= 0 && !!vis[ci];
+    const seenNow = s.alive && ci >= 0 && !!vis[ci];
+    mesh.visible = seenNow;
+    mesh.userData.fogVis = seenNow;
   }
   // enemy BATTERIES are structures: show once their cell is explored
   for (let bi = 0; bi < st.batteries.length; bi++) {
@@ -1054,9 +1057,10 @@ function syncShips(t, dt) {
     const mesh = shipMeshes.get(s.id);
     if (!mesh) continue;
     const u = mesh.userData;
-    // floating bars (all ships): horizontal readiness above, vertical pools beside
+    // floating bars (all ships): horizontal readiness above, vertical pools beside.
+    // Hidden with the ship under fog of war (fogVis false for unseen enemies).
     {
-      const show = s.alive && !u.sinking;
+      const show = s.alive && !u.sinking && u.fogVis !== false;
       // readiness: horizontal bar above the ship; fill climbs 0 -> patience,
       // full green at the yellow tick = the firing point
       u.rdG.visible = show;
