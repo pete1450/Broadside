@@ -62,7 +62,8 @@ want to shoot something, show it your broadside.
 - **Readiness bar** — the vertical bar floating by each of your ships.
   It climbs from zero (yellow) to your patience level and turns full
   green there: green means loaded, and the broadside fires the instant
-  a target crosses the beam.
+  a target crosses the beam. Both the readiness bar and the hull bar above
+  every damaged ship are always visible, fixed-size, and face the camera.
 - **Shot type** — Round shot (full hull damage, full range), Chain
   (×0.8 range, shreds rigging, weak vs hull), Grape (×0.55 range,
   scythes the crew, weak vs hull). Applies to the whole selection.
@@ -103,8 +104,8 @@ stay on the chart once found.
 
 ## Repairs
 
-Anchor somewhere the enemy can't see for 5 seconds and your crews
-start working: hull, rigging, and crew all recover at 2.25% per second.
+Anchor somewhere the enemy can't see for 3 seconds and your crews
+start working: hull, rigging, and crew all recover at 3.375% per second.
 Weighing anchor or being spotted stops it. The enemy gets no such
 luxury — damage you deal sticks; red ships fight on until they sink.
 
@@ -113,18 +114,11 @@ luxury — damage you deal sticks; red ships fight on until they sink.
 The red squadron defends its harbor, not yours. Individual captains
 vary: bold ones press and fire fast, cautious ones hold back and wait
 for the heavy shot. They'll try to keep their broadsides on you, picking
-chain against runners and grape up close. They fight to the death —
-a crippled red ship keeps shooting, because it has no way back.
+chain against runners and grape up close. Most fight to the death — but a ship reduced below 10% hull may
+break and run for the harbor instead (cautious captains run, hotheads
+don't). A routed ship is out of the fight, not mending: damage sticks.
 They sail, see, and shoot under exactly the same rules you do; only
 repairs are yours alone.
-
-## Music
-
-Drop `.mp3` files into `music/sailing/` and `music/combat/`, then rebuild
-(`python3 build/build.py` — the GitHub workflow does this automatically on
-push). Sailing music plays by default; combat music fades in whenever an
-enemy ship is visible and fades back out a few seconds after contact is
-lost. Tracks are picked at random, never the same one twice in a row.
 
 ## Tips
 

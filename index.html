@@ -200,8 +200,8 @@ const TUNE = {
   batteryDmg: 30,
   batteryReload: 12,
   batteryHp: 220,       // shore battery hp (tunable)
-  repairGrace: 5,      // seconds anchored + unseen before repairs start (tunable; 2026-10-09: 10 -> 5)
-  repairRate: 2.25,    // %/s restored to hull/rigging/crew while repairing (tunable; 2026-10-09: 1.5 -> 2.25, +50%)
+  repairGrace: 3,      // seconds anchored + unseen before repairs start (tunable; 2026-10-09: 10 -> 5 -> 3)
+  repairRate: 3.375,   // %/s restored to hull/rigging/crew while repairing (tunable; 2026-10-09: 1.5 -> 2.25 -> 3.375, +50%)
   boundsHalf: 1500,   // playable SQUARE half-size: |x|,|z| <= 1500 (2026-10-08).
                      // Was a disc (boundsR 475): the map corners were unreachable.
                      // 2026-10-08: ocean expanded ~10x (960x960 -> 3000x3000).
@@ -1381,8 +1381,9 @@ function attackStep(st, s, dt, t) {
 const AI_GUARD_R = 150;   // hold within this of the goal (tunable)
 const AI_INTERCEPT_R = 400; // intercept player ships this close to the goal and closing (tunable)
 const AI_PURSUE_R = 600;  // break pursuit past this from the goal (tunable)
-// (2026-10-09: AI_WITHDRAW_HP / AI_RECOVER_HP removed with the WITHDRAW stance —
-// enemies never repair, so crippled ships fight on.)
+// (2026-10-09: WITHDRAW reintroduced as a pure rout — see aiStrategic. No
+// repair happens; AI_WITHDRAW_HP / AI_RECOVER_HP stay removed.)
+const AI_ROUT_HP = 0.10;  // crippled below this hull fraction -> the one-time flee roll (tunable)
 // Player ships this ship can see (class vision range — the enemy's "existing
 // vision rules"). Sorted nearest-first. [{p, d}]
 function visibleEnemies(st, s) {
@@ -1454,8 +1455,16 @@ function aiTarget(st, s, preferred, leashR) {
 function aiStrategic(st, s) {
   const ai = s.ai, c = SHIPCLS[s.cls], goal = ai.goal;
   const hullFrac = s.hp / s.maxHp;
-  // (2026-10-09: WITHDRAW removed — enemies never repair, so crippled ships
-  // fight on instead of falling back.)
+  // ROUT (2026-10-09 user verdict): a crippled ship (<10% hull) decides ONCE
+  // whether to break off. Flee chance = 1 - bloodlust: cautious captains run,
+  // hotheads fight to the death. A routing ship drops its target and sails
+  // for the goal area, rejoining the defense on arrival — it never repairs.
+  // (Invented/tunable: the 10% line, the bloodlust-linked chance.)
+  if (hullFrac < AI_ROUT_HP && ai.fleeDecided === undefined) {
+    ai.fleeDecided = true;
+    if (st.rng() > ai.bloodlust) { ai.stance = "WITHDRAW"; ai.targetId = 0; }
+  }
+  if (ai.stance === "WITHDRAW") return; // aiMove handles the escape sail
   const visP = visibleEnemies(st, s);
   // Continue an existing pursuit? Break off if the target is gone, escaped
   // >600u past the goal, or the bloodlust check fails this tick.
@@ -1495,6 +1504,17 @@ function aiThink(st, s, dt) {
 // Tactical execution. Enemy ships are fully AI-driven (no player orders).
 function aiMove(st, s, dt) {
   const ai = s.ai, c = SHIPCLS[s.cls];
+  if (ai.stance === "WITHDRAW") {
+    // routing: run for the goal area, guns silent; rejoin the defense there
+    const g = ai.goal;
+    if (dist(s.x, s.z, g.x, g.z) < 40) { ai.stance = "GUARD"; ai.targetId = 0; return; }
+    if (s.order.type !== "move" || !s.path.length) {
+      s.order = { type: "move" };
+      s.path = buildPath(s.x, s.z, g.x, g.z, st);
+    }
+    followPath(st, s, dt, true);
+    return;
+  }
   const t = ai.targetId ? unitById(st, ai.targetId) : null;
   if (t && t.alive) { attackStep(st, s, dt, t); return; }
   ai.targetId = 0;

@@ -923,10 +923,10 @@ console.log("== repair at anchor (2026-10-08) ==");
   BS.orderAnchor(st, [s.id]);
   for (const e of st.ships) if (e.side === "E") { e.x = 1400; e.z = -1400; e.order = { type: "hold" }; }
   for (const p of st.ships) if (p.side === "P" && p !== s) { p.x = 0; p.z = 420; p.order = { type: "hold" }; }
-  stepFor(st, 4);
-  ok(s.hp === 100 && !s.repairing, "no repair before the 5s grace", "hp=" + s.hp);
-  stepFor(st, 3);
-  ok(s.repairing && s.hp > 100, "repair starts after 5s unseen + anchored", "hp=" + s.hp.toFixed(1));
+  stepFor(st, 2);
+  ok(s.hp === 100 && !s.repairing, "no repair before the 3s grace", "hp=" + s.hp);
+  stepFor(st, 2);
+  ok(s.repairing && s.hp > 100, "repair starts after 3s unseen + anchored", "hp=" + s.hp.toFixed(1));
   ok(s.rigging > 50 && s.crew > 50, "rigging and crew repair too",
      "rig=" + s.rigging.toFixed(1) + " crew=" + s.crew.toFixed(1));
   const hpMid = s.hp;
@@ -1001,22 +1001,35 @@ console.log("== enemy doctrine AI (2026-10-08) ==");
   ok(c1 <= 2, "no more than 2 claimants per target at bloodlust 0", "p1 claims=" + c1);
 }
 {
-  // (2026-10-09 user verdict: enemies never repair, WITHDRAW removed.)
-  // A crippled enemy keeps fighting and its damage sticks.
+  // (2026-10-09 user verdict: enemies never repair; cripples <10% hull get a
+  // one-time flee roll, chance = 1 - bloodlust, routing to the goal area.)
   const st = BS.newMatch(204, 0);
   const e = st.ships[6]; // enemy frigate
-  e.x = 0; e.z = -100; e.hp = e.maxHp * 0.2;
-  const p = st.ships[1]; // player frigate closes in
-  p.x = 0; p.z = 40; p.heading = Math.PI;
-  st.ships.forEach(s => { if (s !== e && s !== p) { s.x = 1400; s.z = 1400; } });
+  e.x = 0; e.z = -60; e.hp = e.maxHp * 0.09; e.ai.bloodlust = 0; // craven: always flees
+  st.ships.forEach(s => { if (s !== e && s.side === "P") { s.x = 1400; s.z = 1400; } });
   st.batteries.forEach(b => { b.x = 1400; b.z = -1400; });
   e.ai.thinkT = 0;
   BS.step(st, 0.2);
-  ok(e.ai.stance !== "WITHDRAW", "no WITHDRAW stance anymore");
+  ok(e.ai.stance === "WITHDRAW", "crippled craven ship routs");
+  ok(e.ai.targetId === 0, "routing ship drops its target");
+  let t = 0;
+  while (t < 90 && e.ai.stance === "WITHDRAW") { BS.step(st, 0.2); t += 0.2; }
+  ok(e.ai.stance === "GUARD", "routing ship rejoins the defense at the goal", "t=" + t.toFixed(0));
   const hp0 = e.hp;
-  stepFor(st, 20); // anchored nowhere, unseen: still must not repair
-  ok(!e.repairing && e.hp <= hp0, "crippled enemy never repairs", "hp " + hp0.toFixed(1) + " -> " + e.hp.toFixed(1));
-  ok(e.order.type !== "anchored", "crippled enemy does not anchor to mend");
+  stepFor(st, 10);
+  ok(!e.repairing && e.hp <= hp0, "routed ship never repairs", "hp " + hp0.toFixed(1) + " -> " + e.hp.toFixed(1));
+}
+{
+  // hothead (<10% hull, bloodlust 1) fights to the death: no rout, no repair.
+  const st = BS.newMatch(214, 0);
+  const e = st.ships[6];
+  e.x = 0; e.z = -60; e.hp = e.maxHp * 0.09; e.ai.bloodlust = 1;
+  st.ships.forEach(s => { if (s !== e && s.side === "P") { s.x = 1400; s.z = 1400; } });
+  st.batteries.forEach(b => { b.x = 1400; b.z = -1400; });
+  e.ai.thinkT = 0;
+  stepFor(st, 10);
+  ok(e.ai.stance !== "WITHDRAW", "hothead never routs");
+  ok(e.ai.fleeDecided === true, "the flee roll happened exactly once");
 }
 
 console.log("== 60s doctrine sim: no beaching, no deathball, stances shift ==");
