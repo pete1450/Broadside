@@ -2061,12 +2061,6 @@ function taperedBox(len, h, beam, taper) {
 function flatMat(color) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.02, flatShading: true });
 }
-const wakeTex = canvasTex(128, (g, s) => {
-  const gr = g.createLinearGradient(0, 0, 0, s);
-  gr.addColorStop(0, "rgba(255,255,255,0.55)");
-  gr.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = gr; g.fillRect(0, 0, s, s);
-});
 const GROUP_COLORS = [0xffd34d, 0x4dd7ff, 0xb06bff, 0xff9a3d, 0x7dff6b];
 const GROUP_CSS = ["#ffd34d", "#4dd7ff", "#b06bff", "#ff9a3d", "#7dff6b"];
 function buildShipMesh(ship) {
@@ -2167,14 +2161,8 @@ function buildShipMesh(ship) {
   rring.visible = false;
   rring.raycast = () => {}; // never intercept taps
   g.add(rring);
-  // wake
-  const wake = new THREE.Mesh(new THREE.PlaneGeometry(W * 1.4, L * 1.5),
-    new THREE.MeshBasicMaterial({ map: wakeTex, transparent: true, opacity: 0, depthWrite: false }));
-  wake.rotation.x = -Math.PI / 2;
-  wake.position.set(-L * 0.75, 0.32, 0);
-  g.add(wake);
 
-  g.userData = { shipId: ship.id, tilt, ring, gring, wake, rring, rdG, rdFg, rdTick, readyW, readyY,
+  g.userData = { shipId: ship.id, tilt, ring, gring, rring, rdG, rdFg, rdTick, readyW, readyY,
     phase: Math.random() * 7, sinking: 0 };
   return g;
 }
@@ -2868,10 +2856,6 @@ function syncShips(t, dt) {
     } else {
       u.gring.visible = false;
     }
-    // wake
-    u.wake.material.opacity = BS.clamp(s.speed / 12, 0, 1) * 0.5;
-    const wl = 1 + s.speed * 0.12;
-    u.wake.scale.set(1, wl, 1);
   }
   // battery hp bars
   for (let i = 0; i < st.batteries.length; i++) {
@@ -3083,11 +3067,10 @@ musicInit();
 // uniform open water. Density etc. are tunable live: __bs.wispTune("count", 120).
 const WISPS = {
   count: 500,    // 2026-10-09 user verdict: 500 @ full opacity is the bare minimum
-  len: 30,       // ~2x frigate length
+  len: 60,       // doubled 2026-10-09
   width: 4,
   maxOp: 1.0,
-  lifeMin: 2.5, lifeMax: 5, // short-lived: appear/disappear in random places,
-                            // high turnover keeps the target density shimmering
+  lifeMin: 5, lifeMax: 10, // doubled 2026-10-09
   drift: 5,      // u/s at wind mag 1
 };
 // phone-debug overrides: ?wisps=400&wispOp=0.9&wispLen=60
@@ -3111,7 +3094,7 @@ function makeWispTex() {
     const amp = 3 + Math.random() * 7;
     const freq = 1 + Math.random() * 2;
     const ph = Math.random() * Math.PI * 2;
-    const alpha = 0.14 + Math.random() * 0.12;
+    const alpha = 0.28 + Math.random() * 0.24; // doubled 2026-10-09
     const g = ctx.createLinearGradient(0, 0, 256, 0);
     g.addColorStop(0, "rgba(255,255,255,0)");
     g.addColorStop(0.5, "rgba(255,255,255," + alpha.toFixed(3) + ")");
@@ -3154,18 +3137,18 @@ function wispSpawn(w, initial) {
   // at roughly constant on-screen density whatever the zoom
   const viewR = camDist * 1.15;
   let bx = 0, bz = 0, bd = -1;
-  for (let k = 0; k < 10; k++) {
+  for (let k = 0; k < 16; k++) { // more candidates => stronger pull to disturbed areas (2026-10-09)
     const x = camT.x + (Math.random() * 2 - 1) * viewR;
     const z = camT.z + (Math.random() * 2 - 1) * viewR;
     if (Math.abs(x) > 1400 || Math.abs(z) > 1400 || BS.inLand(x, z)) continue;
-    const d = windDisturb(x, z) + Math.random() * 0.25;
+    const d = windDisturb(x, z) + Math.random() * 0.15;
     if (d > bd) { bd = d; bx = x; bz = z; }
   }
   if (bd < 0) { // view is all land/edge: fall back to map-wide
-    for (let k = 0; k < 10; k++) {
+    for (let k = 0; k < 16; k++) {
       const x = (Math.random() * 2 - 1) * 1350, z = (Math.random() * 2 - 1) * 1350;
       if (BS.inLand(x, z)) continue;
-      const d = windDisturb(x, z) + Math.random() * 0.25;
+      const d = windDisturb(x, z) + Math.random() * 0.15;
       if (d > bd) { bd = d; bx = x; bz = z; }
     }
   }
