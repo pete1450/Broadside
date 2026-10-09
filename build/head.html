@@ -74,6 +74,20 @@
     letter-spacing:2px; border-radius:12px; border:1px solid #ffe9a8; background:#d6a420; color:#1a1a1a; }
   #startBtn:active, #againBtn:active { background:#f0bd30; }
   .hidden { display:none !important; }
+  #mechBox { max-width:440px; margin-top:10px; font-size:13px; line-height:1.55; text-align:left;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:10px;
+    padding:2px 14px; }
+  #mechBox summary { cursor:pointer; text-align:center; font-weight:700; letter-spacing:2px;
+    font-size:12px; padding:10px 0; color:#ffe9a8; list-style:none; }
+  #mechBox summary::-webkit-details-marker { display:none; }
+  #mechBox summary::before { content:"▸ "; }
+  #mechBox[open] { max-height: 42vh; overflow-y: auto; }
+  #mechBox[open] summary { position:sticky; top:0; background:rgba(10,20,26,.96);
+    margin:0 -14px; padding-left:14px; padding-right:14px; }
+  #mechBox[open] summary::before { content:"▾ "; }
+  #mechBox h3 { font-size:12px; letter-spacing:1.5px; color:#ffe9a8; margin:12px 0 2px; }
+  #mechBox p { margin:2px 0 6px; opacity:.88; font-size:13px; }
+  #mechBox b { color:#fff; }
 </style>
 </head>
 <body>
@@ -138,6 +152,41 @@
   <b>anchor inside the harbor</b> to capture the fort. Mind the wind — your ships
   tack automatically, but sailing upwind is slow. Broadsides only fire abeam:
   don't show your broadside unless you're ready to use it.</p>
+  <details id="mechBox">
+    <summary>HOW IT PLAYS</summary>
+    <h3>GOAL</h3>
+    <p>Fight north through the red squadron and <b>anchor inside the harbor</b>
+    to take the fort. Lose every ship and it's over — there are no
+    reinforcements, and every hull is irreplaceable.</p>
+    <h3>WIND</h3>
+    <p>The compass sets the prevailing wind; pale wisps streaming over the
+    water show how it bends around land. Fast with the wind abeam or astern,
+    sluggish close-hauled, and dead upwind is impossible — your ships tack
+    through it in zigzags on their own. Turning needs way on: a stopped ship
+    wallows, a moving ship carves.</p>
+    <h3>YOUR SHIPS' HEALTH</h3>
+    <p>Every ship tracks <b>Hull</b>, <b>Rigging</b>, and <b>Crew</b> (the
+    vertical bars). Hull at zero means she sinks. Shredded rigging slows her
+    and dulls her turning; dead crew slows her reloads and spoils her aim.</p>
+    <h3>REPAIR</h3>
+    <p>Anchor somewhere the enemy can't see and your crews patch all three
+    pools — but weighing anchor takes precious seconds, and being spotted
+    stops the work cold. The enemy gets no such luxury: damage you deal
+    sticks.</p>
+    <h3>AMMO</h3>
+    <p><b>Round shot</b> for honest hull-smashing at full range.
+    <b>Chain</b> shreds rigging and slows her down, at shorter range.
+    <b>Grape</b> scythes her crew up close. Pick the right tool before you
+    close.</p>
+    <h3>TRADEOFFS</h3>
+    <p>Guns fire <b>only abeam</b> — the squarer your broadside, the harder
+    every gun hits. <b>Patience</b> trades rate for weight: spray light
+    broadsides fast, or hold for slow crushing ones. Raking her stern is the
+    dream; firing into her bow is a waste. <b>Holding your guns</b> frees
+    the crews to the sails for extra speed — but you arrive with cold guns.
+    And a routed enemy below a sliver of hull may break for home: let her
+    go, or finish her.</p>
+  </details>
   <button id="startBtn">SET SAIL</button>
 </div>
 
