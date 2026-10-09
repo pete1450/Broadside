@@ -1164,13 +1164,17 @@ const MUSIC = {
   errCount: { sailing: 0, combat: 0 },
   els: {},
   mood: "sailing",
-  baseVol: { sailing: 0.6, combat: 0.75 },
+  baseVol: { sailing: 0.45, combat: 0.5625 }, // 75% of the original 0.6/0.75 (2026-10-09)
   quietT: 99,
   lastCheckMs: 0,
   started: false,
-  muted: false,
+  vol: 1, // user volume multiplier from the slider, 0..1 (persisted)
 };
-try { MUSIC.muted = localStorage.getItem("bs_music_muted") === "1"; } catch (e) {}
+try {
+  const v = localStorage.getItem("bs_music_vol");
+  if (v !== null) MUSIC.vol = Math.max(0, Math.min(1, parseFloat(v)));
+  else if (localStorage.getItem("bs_music_muted") === "1") MUSIC.vol = 0; // migrate old mute toggle
+} catch (e) {}
 
 function musicPick(m) {
   const list = MUSIC.lists[m];
@@ -1231,14 +1235,17 @@ function musicInit() {
     .then(r => { if (!r.ok) throw 0; return r.json(); })
     .then(apply)
     .catch(() => { if (window.__MUSIC_FALLBACK) apply(window.__MUSIC_FALLBACK); });
-  const btn = $("bMusic");
-  btn.textContent = MUSIC.muted ? "🔇" : "🔊";
-  btn.onclick = () => {
-    MUSIC.muted = !MUSIC.muted;
-    try { localStorage.setItem("bs_music_muted", MUSIC.muted ? "1" : "0"); } catch (e) {}
-    btn.textContent = MUSIC.muted ? "🔇" : "🔊";
-    if (MUSIC.muted) for (const m of ["sailing", "combat"]) MUSIC.els[m].pause();
+  const slider = $("volSlider"), vicon = $("volIcon");
+  const paintVol = () => {
+    slider.value = Math.round(MUSIC.vol * 100);
+    vicon.textContent = MUSIC.vol > 0 ? "🔊" : "🔇";
   };
+  paintVol();
+  slider.addEventListener("input", () => {
+    MUSIC.vol = slider.value / 100;
+    try { localStorage.setItem("bs_music_vol", String(MUSIC.vol)); } catch (e) {}
+    vicon.textContent = MUSIC.vol > 0 ? "🔊" : "🔇";
+  });
 }
 
 function musicStart() {
@@ -1247,7 +1254,7 @@ function musicStart() {
   MUSIC.started = true;
   MUSIC.mood = "sailing";
   MUSIC.quietT = 99;
-  if (!MUSIC.muted) musicStartTrack("sailing");
+  if (MUSIC.vol > 0) musicStartTrack("sailing");
 }
 
 function musicTick(dt) {
@@ -1268,8 +1275,8 @@ function musicTick(dt) {
   const fadeT = MUSIC.mood === "combat" ? 0.8 : 3.0; // quick to combat, slow back to sailing
   for (const m of ["sailing", "combat"]) {
     const el = MUSIC.els[m];
-    const active = !MUSIC.muted && MUSIC.mood === m && MUSIC.lists[m].length > 0;
-    const tgt = active ? MUSIC.baseVol[m] : 0;
+    const active = MUSIC.vol > 0 && MUSIC.mood === m && MUSIC.lists[m].length > 0;
+    const tgt = active ? MUSIC.baseVol[m] * MUSIC.vol : 0;
     if (active && el.paused) musicStartTrack(m); // (re)start on every mood switch
     const v = el.volume;
     if (v !== tgt) {

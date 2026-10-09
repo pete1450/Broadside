@@ -20,7 +20,10 @@
   #windbox { display:flex; align-items:center; gap:8px; }
   #windcompass { width:44px; height:44px; }
   #windlabel { font-size:10px; letter-spacing:2px; opacity:.85; text-align:center; text-shadow:0 1px 3px rgba(0,0,0,.6); }
-  #bWindDbg, #bMusic { min-width:42px; padding:9px 6px; font-size:15px; }
+  #bWindDbg { min-width:42px; padding:9px 6px; font-size:15px; }
+  #volwrap { display:flex; align-items:center; gap:5px; padding:9px 8px; }
+  #volIcon { font-size:15px; }
+  #volSlider { width:72px; accent-color:#ffd75e; cursor:pointer; }
   #capwrap { position:fixed; top:calc(64px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
     z-index:10; pointer-events:none; text-align:center; display:none; }
   #caplabel { font-size:11px; letter-spacing:2px; color:#ffe9a8; text-shadow:0 1px 3px rgba(0,0,0,.7); margin-bottom:3px; }
@@ -85,7 +88,7 @@
     <div id="windlabel">WIND</div>
     <canvas id="windcompass" width="88" height="88"></canvas>
     <button id="bWindDbg" class="obtn" title="debug overlay: wind field + gun range rings">🌬️</button>
-    <button id="bMusic" class="obtn" title="toggle music">🔊</button>
+    <span id="volwrap" class="obtn" title="music volume"><span id="volIcon">🔊</span><input id="volSlider" type="range" min="0" max="100" value="100"></span>
   </div>
 </div>
 
