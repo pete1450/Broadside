@@ -1380,5 +1380,24 @@ console.log("== way-dependent turning + corner carving + irons glide (2026-10-09
   ok(spdAtMin >= 0.6 * 15, "carved corner: keeps >=60% entry speed at the corner", spdAtMin.toFixed(2));
 }
 
+{
+  // guns held => +15% speed (gun crews work the sails)
+  const st = BS.newMatch(7, 0);
+  const s = st.ships[0];
+  s.x = 0; s.z = 0; s.heading = 0; s.speed = 0;
+  st.windF = null; // uniform wind for a clean measurement
+  st.wind = Math.PI / 2; // beam reach: sailEff = 1
+  BS.orderMove(st, [s.id], 0, 600);
+  s.gunsFree = true;
+  for (let t = 0; t < 40; t += 0.1) BS.step(st, 0.1);
+  const freeSpd = s.speed;
+  s.speed = 0; s.x = 0; s.z = 0; s.heading = 0; s.gunsFree = false;
+  BS.orderMove(st, [s.id], 0, 600);
+  for (let t = 0; t < 40; t += 0.1) BS.step(st, 0.1);
+  const heldSpd = s.speed;
+  ok(freeSpd > 1 && Math.abs(heldSpd / freeSpd - 1.15) < 0.03,
+    "held guns give +15% speed", freeSpd.toFixed(2) + " -> " + heldSpd.toFixed(2));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

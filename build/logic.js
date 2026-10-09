@@ -1169,7 +1169,9 @@ function steerToward(st, s, dt, wantH, speedMul) {
   const dh = angNorm(wantH - s.heading);
   s.heading += clamp(dh, -turnRate * dt, turnRate * dt);
   const eff = sailEff(s.heading, w.ang);
-  const target = c.speed * eff * (speedMul || 1) * w.mag * fac.spd;
+  // holding guns frees the gun crews to work the sails: +15% speed (2026-10-09 user verdict)
+  const heldMul = s.gunsFree === false ? 1.15 : 1;
+  const target = c.speed * eff * (speedMul || 1) * w.mag * fac.spd * heldMul;
   // ships wallowing in the no-go zone barely move
   // gentle decel (0.5x) so ships coast to a stop instead of halting hard (2026-10-08).
   // In irons (sails flogging, eff~0) the ship glides on momentum instead of

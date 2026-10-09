@@ -45,8 +45,8 @@ Bottom bar orders: **Move**, **Attack**, **Patrol**, **Hold**,
   to get moving again takes 5 seconds — don't anchor with enemies near).
 - **Group** — assign the selection to control group 1–5. The whole
   group is selected immediately.
-- **Guns: Hold** — never fire. **Guns: Free** — fire per your patience
-  setting.
+- **Guns: Hold** — never fire, and the freed gun crews work the sails:
+  +15% ship speed. **Guns: Free** — fire per your patience setting.
 
 ## Gunnery
 
@@ -74,6 +74,9 @@ your line of fire.
 - **Pool bars** — three vertical bars beside every ship: Hull (green),
   Rigging (blue), Crew (amber). All always visible, fixed-size, facing the
   camera. No more guessing how hurt that frigate is.
+- **Range rings** — select one of your ships to see her effective gun
+  ring (it follows the loaded shot type). The 🌬️ overlay shows every
+  ship's ring at once.
 - **Shot type** — Round shot (full hull damage, full range), Chain
   (×0.8 range, shreds rigging, weak vs hull), Grape (×0.55 range,
   scythes the crew, weak vs hull). Applies to the whole selection.
@@ -81,7 +84,7 @@ your line of fire.
 Damage model — every ship tracks three pools:
 
 - **Hull** — at zero, she sinks.
-- **Rigging** — shot away, your ship slows (down to 35% speed) and
+- **Rigging** — shot away, your ship slows (down to 55% speed) and
   turns worse.
 - **Crew** — casualties slow your reloads (up to +80%) and spoil your
   aim (up to −35%).
@@ -103,7 +106,9 @@ the wind, not against it — beating upwind into the enemy's teeth is a
 long, bloody business.
 
 Land bends the local wind: it runs parallel to coasts and weakens in
-the lee of islands.
+the lee of islands. White wisps stream over the water showing the local
+flow — they gather where the wind bends and shears around land, and
+thin out over steady open water.
 
 ## Fog of war
 
@@ -118,6 +123,12 @@ Anchor somewhere the enemy can't see for 3 seconds and your crews
 start working: hull, rigging, and crew all recover at 3.375% per second.
 Weighing anchor or being spotted stops it. The enemy gets no such
 luxury — damage you deal sticks; red ships fight on until they sink.
+
+## Music
+
+A volume slider (top right) starts at 25%. Sailing music plays until
+an enemy ship is sighted, then it crossfades to battle music — each
+mood picks up its own song where it left off.
 
 ## The enemy
 
