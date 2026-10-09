@@ -42,12 +42,12 @@
   .obtn:disabled { opacity:.35; }
   #selpanel { position:fixed; left:10px; bottom:calc(106px + env(safe-area-inset-bottom)); z-index:10;
     background:rgba(10,22,30,.8); border:1px solid rgba(255,255,255,.25); border-radius:10px;
-    padding:8px 10px; color:#fff; font-size:12px; display:none; pointer-events:auto; max-width:230px; }
+    padding:8px 10px; color:#fff; font-size:12px; display:none; pointer-events:auto; width:200px; max-width:230px; }
   #selpanel .nm { font-weight:700; font-size:13px; }
-  /* damage bars: hull (green) / rigging (blue) / crew (amber) */
+  /* damage bars: hull (green) / rigging (blue) / crew (amber) — fixed size, never collapse */
   #selpanel .bprow { display:flex; align-items:center; gap:5px; margin-top:4px; }
-  #selpanel .bplab { font-size:10px; font-weight:800; width:44px; text-align:left; }
-  #selpanel .bptrack { flex:1; height:5px; border-radius:3px; background:rgba(0,0,0,.5); overflow:hidden; }
+  #selpanel .bplab { font-size:10px; font-weight:800; width:44px; text-align:left; flex:none; }
+  #selpanel .bptrack { flex:1; min-width:90px; height:7px; border-radius:4px; background:rgba(0,0,0,.5); overflow:hidden; }
   #selpanel .bpfill { height:100%; border-radius:3px; }
   #selpanel .sub { opacity:.75; margin-top:4px; line-height:1.35; }
   /* gunnery doctrine row: shot type + fire-threshold slider (2026-10-08) */

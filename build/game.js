@@ -1272,12 +1272,15 @@ function musicTick(dt) {
       if (MUSIC.quietT >= 5) MUSIC.mood = "sailing";
     }
   }
-  const fadeT = MUSIC.mood === "combat" ? 0.8 : 3.0; // quick to combat, slow back to sailing
+  const fadeT = MUSIC.mood === "combat" ? 2.0 : 5.0; // audible crossfades both ways (2026-10-09)
   for (const m of ["sailing", "combat"]) {
     const el = MUSIC.els[m];
     const active = MUSIC.vol > 0 && MUSIC.mood === m && MUSIC.lists[m].length > 0;
     const tgt = active ? MUSIC.baseVol[m] * MUSIC.vol : 0;
-    if (active && el.paused) musicStartTrack(m); // (re)start on every mood switch
+    if (active && el.paused) {
+      if (el.currentSrc) { const pr = el.play(); if (pr && pr.catch) pr.catch(() => {}); } // resume: keep the crossfade continuous
+      else musicStartTrack(m);
+    }
     const v = el.volume;
     if (v !== tgt) {
       const step = dt * MUSIC.baseVol[m] / fadeT;
