@@ -105,17 +105,18 @@ stay on the chart once found.
 
 Anchor somewhere the enemy can't see for 5 seconds and your crews
 start working: hull, rigging, and crew all recover at 2.25% per second.
-Weighing anchor or being spotted stops it. The enemy plays by the same
-rules — a mauled red ship that breaks off is going somewhere to mend.
+Weighing anchor or being spotted stops it. The enemy gets no such
+luxury — damage you deal sticks; red ships fight on until they sink.
 
 ## The enemy
 
 The red squadron defends its harbor, not yours. Individual captains
 vary: bold ones press and fire fast, cautious ones hold back and wait
-for the heavy shot. They'll try to keep their broadsides on you, pick
-chain against runners and grape up close, and a ship reduced to 30%
-hull will break off, anchor somewhere safe, repair, and come back.
-They see, sail, shoot, and mend under exactly the same rules you do.
+for the heavy shot. They'll try to keep their broadsides on you, picking
+chain against runners and grape up close. They fight to the death —
+a crippled red ship keeps shooting, because it has no way back.
+They sail, see, and shoot under exactly the same rules you do; only
+repairs are yours alone.
 
 ## Music
 

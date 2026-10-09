@@ -1001,24 +1001,22 @@ console.log("== enemy doctrine AI (2026-10-08) ==");
   ok(c1 <= 2, "no more than 2 claimants per target at bloodlust 0", "p1 claims=" + c1);
 }
 {
-  // WITHDRAW: hull <30% -> falls back to the batteries and anchors.
+  // (2026-10-09 user verdict: enemies never repair, WITHDRAW removed.)
+  // A crippled enemy keeps fighting and its damage sticks.
   const st = BS.newMatch(204, 0);
   const e = st.ships[6]; // enemy frigate
   e.x = 0; e.z = -100; e.hp = e.maxHp * 0.2;
-  st.ships.forEach(s => { if (s !== e && s.side === "P") { s.x = 1400; s.z = 1400; } });
+  const p = st.ships[1]; // player frigate closes in
+  p.x = 0; p.z = 40; p.heading = Math.PI;
+  st.ships.forEach(s => { if (s !== e && s !== p) { s.x = 1400; s.z = 1400; } });
   st.batteries.forEach(b => { b.x = 1400; b.z = -1400; });
   e.ai.thinkT = 0;
   BS.step(st, 0.2);
-  ok(e.ai.stance === "WITHDRAW", "crippled ship goes to WITHDRAW");
-  let t = 0;
-  while (t < 120 && e.order.type !== "anchored") { BS.step(st, 0.2); t += 0.2; }
-  ok(e.order.type === "anchored", "withdrawn ship anchors in battery cover", "t=" + t.toFixed(0));
-  ok(BS.dist(e.x, e.z, 0, -30) < 60, "anchored near the withdraw point",
-     "d=" + BS.dist(e.x, e.z, 0, -30).toFixed(0));
-  // ...and repairs there (no player ship in any enemy vision)
+  ok(e.ai.stance !== "WITHDRAW", "no WITHDRAW stance anymore");
   const hp0 = e.hp;
-  stepFor(st, 15);
-  ok(e.hp > hp0 && e.repairing, "withdrawn ship repairs at anchor", "hp " + hp0.toFixed(0) + " -> " + e.hp.toFixed(0));
+  stepFor(st, 20); // anchored nowhere, unseen: still must not repair
+  ok(!e.repairing && e.hp <= hp0, "crippled enemy never repairs", "hp " + hp0.toFixed(1) + " -> " + e.hp.toFixed(1));
+  ok(e.order.type !== "anchored", "crippled enemy does not anchor to mend");
 }
 
 console.log("== 60s doctrine sim: no beaching, no deathball, stances shift ==");

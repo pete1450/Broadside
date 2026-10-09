@@ -839,7 +839,7 @@ function mkShip(side, cls, x, z, heading) {
     engage: false, engageTgt: 0,
     // enemy doctrine AI (2026-10-08): per-ship goal + bloodlust + stance.
     // goal: defend the harbor; bloodlust: 0.25..0.75 seeded per ship.
-    ai: { stance: "GUARD", thinkT: 0, targetId: 0, bloodlust: 0.5, goal: null, withdrawPt: null },
+    ai: { stance: "GUARD", thinkT: 0, targetId: 0, bloodlust: 0.5, goal: null },
     hitFlash: 0,
   };
 }
@@ -880,7 +880,6 @@ function newMatch(seed, windOverride, opts) {
     for (const s of st.ships) {
       if (s.side !== "E") continue;
       s.ai.goal = { x: ZONE.x, z: ZONE.z };
-      s.ai.withdrawPt = [0, -30]; // behind the batteries, in their cover (invented, tunable)
       s.ai.bloodlust = 0.25 + 0.5 * rng();
       s.ai.thinkT = rng() * 2; // stagger the 2s strategic ticks
     }
@@ -1378,12 +1377,12 @@ function attackStep(st, s, dt, t) {
 // The strategic tick runs every 2s per ship (staggered); the tactical layer
 // (attackStep/broadsideHold, fire discipline, split damage) is the same code
 // the player uses. The AI uses every gunnery option: shot types, fire
-// thresholds, and withdraw-to-repair.
+// thresholds.
 const AI_GUARD_R = 150;   // hold within this of the goal (tunable)
 const AI_INTERCEPT_R = 400; // intercept player ships this close to the goal and closing (tunable)
 const AI_PURSUE_R = 600;  // break pursuit past this from the goal (tunable)
-const AI_WITHDRAW_HP = 0.30; // fall back below this hull fraction (tunable)
-const AI_RECOVER_HP = 0.50;  // resume guard at/above this (tunable)
+// (2026-10-09: AI_WITHDRAW_HP / AI_RECOVER_HP removed with the WITHDRAW stance —
+// enemies never repair, so crippled ships fight on.)
 // Player ships this ship can see (class vision range — the enemy's "existing
 // vision rules"). Sorted nearest-first. [{p, d}]
 function visibleEnemies(st, s) {
@@ -1455,14 +1454,8 @@ function aiTarget(st, s, preferred, leashR) {
 function aiStrategic(st, s) {
   const ai = s.ai, c = SHIPCLS[s.cls], goal = ai.goal;
   const hullFrac = s.hp / s.maxHp;
-  // WITHDRAW: crippled ships fall back to the batteries, anchor in cover,
-  // and repair (same repair rules as the player). Rejoin at AI_RECOVER_HP.
-  if (ai.stance !== "WITHDRAW" && hullFrac < AI_WITHDRAW_HP) {
-    ai.stance = "WITHDRAW"; ai.targetId = 0;
-  } else if (ai.stance === "WITHDRAW" && hullFrac >= AI_RECOVER_HP) {
-    ai.stance = "GUARD"; ai.targetId = 0;
-  }
-  if (ai.stance === "WITHDRAW") return; // aiMove handles the fallback sail
+  // (2026-10-09: WITHDRAW removed — enemies never repair, so crippled ships
+  // fight on instead of falling back.)
   const visP = visibleEnemies(st, s);
   // Continue an existing pursuit? Break off if the target is gone, escaped
   // >600u past the goal, or the bloodlust check fails this tick.
@@ -1502,17 +1495,6 @@ function aiThink(st, s, dt) {
 // Tactical execution. Enemy ships are fully AI-driven (no player orders).
 function aiMove(st, s, dt) {
   const ai = s.ai, c = SHIPCLS[s.cls];
-  if (ai.stance === "WITHDRAW") {
-    if (s.order.type === "anchored" || s.order.type === "weighing") return; // repairing
-    const w = ai.withdrawPt;
-    if (dist(s.x, s.z, w[0], w[1]) < 30) { orderAnchor(st, [s.id]); return; }
-    if (s.order.type !== "move" || !s.path.length) {
-      s.order = { type: "move" };
-      s.path = buildPath(s.x, s.z, w[0], w[1], st);
-    }
-    followPath(st, s, dt, true);
-    return;
-  }
   const t = ai.targetId ? unitById(st, ai.targetId) : null;
   if (t && t.alive) { attackStep(st, s, dt, t); return; }
   ai.targetId = 0;
@@ -1606,25 +1588,25 @@ function step(st, dt) {
   }
   separation(st);
 
-  // repair at anchor (2026-10-08, symmetric): a ship that stays anchored with
-  // no enemy inside any friendly ship's vision for TUNE.repairGrace continuous
+  // repair at anchor (2026-10-08): a PLAYER ship that stays anchored with no
+  // enemy inside any friendly ship's vision for TUNE.repairGrace continuous
   // seconds starts repairing (+repairRate %/s to hull/rigging/crew, capped).
   // Weighing anchor or an enemy entering vision resets the grace period.
+  // Enemy ships never repair (2026-10-09 user verdict): damage sticks.
   {
-    let threatP = false, threatE = false; // enemy visible to P / to E
+    let threatP = false; // enemy visible to P
     for (const a of st.ships) {
-      if (!a.alive) continue;
+      if (!a.alive || a.side !== "P") continue;
       for (const b of st.ships) {
         if (!b.alive || b.side === a.side) continue;
-        if (dist(a.x, a.z, b.x, b.z) <= SHIPCLS[a.cls].vision) {
-          if (a.side === "P") threatP = true; else threatE = true;
-        }
+        if (dist(a.x, a.z, b.x, b.z) <= SHIPCLS[a.cls].vision) { threatP = true; break; }
       }
+      if (threatP) break;
     }
     for (const s of st.ships) {
       if (!s.alive || s.kind !== "ship") continue;
-      const threat = s.side === "P" ? threatP : threatE;
-      if (s.order.type === "anchored" && !threat) {
+      if (s.side !== "P") { s.repairT = 0; s.repairing = false; continue; }
+      if (s.order.type === "anchored" && !threatP) {
         s.repairT += dt;
         if (s.repairT >= TUNE.repairGrace) {
           s.repairing = true;
