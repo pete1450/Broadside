@@ -1838,6 +1838,7 @@ function fowCellAt(x, z) {
   return j * FOG_N + i;
 }
 let visStamp = 0;
+const expSoft = new Float32Array(FOG_N * FOG_N); // presentation-only soft explored edge
 function updateFog() {
   // Feathered fog (2026-10-08): BS.computeVisibility returns the binary
   // gameplay grid (vis) plus a soft seen[] field — 1 inside visionR-feather,
@@ -1848,19 +1849,32 @@ function updateFog() {
   const v = BS.computeVisibility(st);
   const vis = v.vis, seen = v.seen, exp = st.fow.exp;
   const d = fogImg.data;
+  // soften the explored boundary (2026-10-09): exp is binary per 5.9u cell, which
+  // made the white/veil edge look blocky. A 3x3 box blur gives a ~3-cell ramp;
+  // GPU bilinear filtering smooths the rest. Presentation only — gameplay keeps
+  // using the binary exp grid.
+  for (let cy = 0; cy < FOG_N; cy++) {
+    const y0 = Math.max(0, cy - 1) * FOG_N, y1 = Math.min(FOG_N - 1, cy + 1) * FOG_N;
+    const yc = cy * FOG_N;
+    for (let cx = 0; cx < FOG_N; cx++) {
+      const x0 = Math.max(0, cx - 1), x1 = Math.min(FOG_N - 1, cx + 1);
+      let sum = exp[y0 + x0] + exp[y0 + cx] + exp[y0 + x1] +
+                exp[yc + x0] + exp[yc + cx] + exp[yc + x1] +
+                exp[y1 + x0] + exp[y1 + cx] + exp[y1 + x1];
+      expSoft[yc + cx] = sum / 9;
+    }
+  }
   for (let cy = 0; cy < FOG_N; cy++) {
     const base = cy * FOG_N;
     for (let cx = 0; cx < FOG_N; cx++) {
       const ci = base + cx, o = ci * 4;
-      const a = 1 - seen[ci];
-      if (exp[ci]) {
-        // explored but out of vision: steel-blue veil. Must be dark enough that
-        // WHITE marble terrain reads as different from both dense white fog
-        // and fully-visible rendering (a light veil over white marble is still white).
-        d[o] = 135; d[o + 1] = 155; d[o + 2] = 175; d[o + 3] = Math.round(140 * a);
-      } else {
-        d[o] = 255; d[o + 1] = 255; d[o + 2] = 255; d[o + 3] = Math.round(245 * a);
-      }
+      const s = seen[ci], e = expSoft[ci];
+      // white (unexplored) crossfades to the steel-blue veil (explored, unseen)
+      // as e goes 0->1; both fade to clear as s goes 0->1
+      d[o] = 135 + Math.round(120 * (1 - e));
+      d[o + 1] = 155 + Math.round(100 * (1 - e));
+      d[o + 2] = 175 + Math.round(80 * (1 - e));
+      d[o + 3] = Math.round(245 * (1 - e) + 140 * e * (1 - s));
     }
   }
   fogCtx.putImageData(fogImg, 0, 0);
@@ -3062,16 +3076,17 @@ musicInit();
 // (2026-10-09 user verdict). Each wisp is a few overlapping sinusoidal cloud
 // strokes, ~2x ship length, that appears in a random place, drifts downwind,
 // and fades out after a few seconds — high turnover keeps the target density
-// shimmering rather than parked. Spawn density follows local-wind disturbance,
-// so wisps gather where the wind bends and shears near land and thin out over
-// uniform open water. Density etc. are tunable live: __bs.wispTune("count", 120).
+// shimmering rather than parked. Distribution is map-wide and zoom-independent;
+// spawn candidates are weighted toward local-wind disturbance, so wisps gather
+// where the wind bends and shears near land and thin out over uniform open
+// water. Density etc. are tunable live: __bs.wispTune("count", 120).
 const WISPS = {
   count: 500,    // 2026-10-09 user verdict: 500 @ full opacity is the bare minimum
   len: 60,       // doubled 2026-10-09
   width: 4,
   maxOp: 1.0,
   lifeMin: 5, lifeMax: 10, // doubled 2026-10-09
-  drift: 5,      // u/s at wind mag 1
+  drift: 14,     // u/s at wind mag 1 — brisk flow (tunable, 2026-10-09)
 };
 // phone-debug overrides: ?wisps=400&wispOp=0.9&wispLen=60
 {
@@ -3132,25 +3147,16 @@ function windDisturb(x, z) {
   return Math.abs(BS.angDiff(w.ang, st.wind)) / Math.PI + Math.abs(w.mag - 1) * 0.8;
 }
 function wispSpawn(w, initial) {
-  // sample candidates in the view box around the camera target, keep the most
-  // disturbed (never on land) — the field shimmers wherever the player looks,
-  // at roughly constant on-screen density whatever the zoom
-  const viewR = camDist * 1.15;
+  // map-wide distribution (2026-10-09 user verdict): sample candidates across
+  // the whole ocean and keep the most disturbed (never on land), so the field
+  // keeps its distribution no matter the zoom — disturbed areas (island shear,
+  // channels) get more, uniform open water gets fewer
   let bx = 0, bz = 0, bd = -1;
-  for (let k = 0; k < 16; k++) { // more candidates => stronger pull to disturbed areas (2026-10-09)
-    const x = camT.x + (Math.random() * 2 - 1) * viewR;
-    const z = camT.z + (Math.random() * 2 - 1) * viewR;
-    if (Math.abs(x) > 1400 || Math.abs(z) > 1400 || BS.inLand(x, z)) continue;
+  for (let k = 0; k < 16; k++) {
+    const x = (Math.random() * 2 - 1) * 1350, z = (Math.random() * 2 - 1) * 1350;
+    if (BS.inLand(x, z)) continue;
     const d = windDisturb(x, z) + Math.random() * 0.15;
     if (d > bd) { bd = d; bx = x; bz = z; }
-  }
-  if (bd < 0) { // view is all land/edge: fall back to map-wide
-    for (let k = 0; k < 16; k++) {
-      const x = (Math.random() * 2 - 1) * 1350, z = (Math.random() * 2 - 1) * 1350;
-      if (BS.inLand(x, z)) continue;
-      const d = windDisturb(x, z) + Math.random() * 0.15;
-      if (d > bd) { bd = d; bx = x; bz = z; }
-    }
   }
   if (bd < 0) return false;
   const wnd = BS.windAt(st, bx, bz);
@@ -3185,11 +3191,8 @@ function wispsTick(dt) {
   for (const w of wisps) {
     w.age += dt;
     // land is only checked at spawn: lives are short and drift is slow, so a
-    // wisp can't travel far enough to matter. Recycle wisps that fall out of
-    // the view box so the density follows the camera.
-    const vx = w.x - camT.x, vz = w.z - camT.z;
-    const outR = camDist * 1.7;
-    if (w.age >= w.life || vx * vx + vz * vz > outR * outR) {
+    // wisp can't travel far enough to matter
+    if (w.age >= w.life || Math.abs(w.x) > 1450 || Math.abs(w.z) > 1450) {
       if (!wispSpawn(w, false)) { w.mesh.material.opacity = 0; }
       continue;
     }
